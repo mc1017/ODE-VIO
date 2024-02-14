@@ -4,6 +4,7 @@ import numpy as np
 from pathlib import Path
 import math
 from src.data.KITTI_dataset import KITTI
+from src.data.utils import *
 from src.data.KITTI_eval import KITTI_tester
 from src.models.NeuralODE import DeepVIO
 from utils.params import set_gpu_ids, load_pretrained_model, get_optimizer
@@ -47,7 +48,7 @@ parser.add_argument('--Lambda', type=float, default=3e-5, help='penalty factor f
 parser.add_argument('--experiment_name', type=str, default='experiment', help='experiment name')
 parser.add_argument('--optimizer', type=str, default='Adam', help='type of optimizer [Adam, SGD]')
 
-parser.add_argument('--pretrain_flownet',type=str, default='./pretrain_models/flownets_bn_EPE2.459.pth.tar', help='wehther to use the pre-trained flownet')
+parser.add_argument('--pretrain_flownet',type=str, default='./pretrained_models/flownets_bn_EPE2.459.pth.tar', help='wehther to use the pre-trained flownet')
 parser.add_argument('--pretrain', type=str, default=None, help='path to the pretrained model')
 parser.add_argument('--hflip', default=False, action='store_true', help='whether to use horizonal flipping as augmentation')
 parser.add_argument('--color', default=False, action='store_true', help='whether to use color augmentations')
@@ -153,9 +154,18 @@ def evaluate(model, tester, ep):
 def main():
     
     # Load the dataset
+    transform_train = [ToTensor(),
+                       Resize((args.img_h, args.img_w))]
+    if args.hflip:
+        transform_train += [RandomHorizontalFlip()]
+    if args.color:
+        transform_train += [RandomColorAug()]
+    transform_train = Compose(transform_train)
+
     train_dataset = KITTI(args.data_dir,
                         sequence_length=args.seq_len,
                         train_seqs=args.train_seq,
+                        transform=transform_train
                         )
     logger.info('train_dataset: ' + str(train_dataset))
     
@@ -170,6 +180,9 @@ def main():
     # GPU selections
     gpu_id = set_gpu_ids(args)
 
+    # Model initialization
+    model = DeepVIO(args)
+    
     # Continual training or not
     load_pretrained_model(model, args)
     
@@ -189,7 +202,7 @@ def main():
 
     # Feed model to GPU
     model.cuda(gpu_id)
-    model = torch.nn.DataParallel(model, device_ids = gpu_id)
+    model = torch.nn.DataParallel(model, device_ids = [gpu_id])
 
     pretrain = args.pretrain
     init_epoch = int(pretrain[-7:-4])+1 if args.pretrain is not None else 0    

@@ -51,7 +51,7 @@ class data_partition():
         for img_path in image_path_sequence:
             img_as_img = Image.open(img_path)
             img_as_img = TF.resize(img_as_img, size=(self.opt.img_h, self.opt.img_w))
-            img_as_tensor = TF.to_tensor(img_as_img) - 0.5
+            img_as_tensor = TF.to_tensor(img_as_img.copy()) - 0.5
             img_as_tensor = img_as_tensor.unsqueeze(0)
             image_sequence.append(img_as_tensor)
         image_sequence = torch.cat(image_sequence, 0)

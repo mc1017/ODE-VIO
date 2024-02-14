@@ -1,1 +1,10 @@
+# Dependancies and Caches
 venv/
+**/__pycache__/
+**/.ipynb_checkpoints/
+
+# Models
+pretrained_models/
+
+# Training
+results/
