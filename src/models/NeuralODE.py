@@ -203,7 +203,7 @@ class Pose_ODE(nn.Module):
     def __init__(self, opt):
         super(Pose_ODE, self).__init__()
 
-        # The main RNN network
+        # The main ODE network
         self.f_len = opt.v_f_len + opt.i_f_len
         self.ode_func = ODEFunc(hidden_dim=self.f_len)
         self.fuse = Fusion_module(opt)
@@ -215,10 +215,8 @@ class Pose_ODE(nn.Module):
             nn.Linear(128, 6))
 
     def forward(self, fv, fv_alter, fi, dec, prev=None):
-        
-        # Select between fv and fv_alter
-        # The first element of decision determines whether to use fv and last element determine to use fv_alter
-        # Here we'd typically preprocess inputs to be compatible with continuous dynamics, if necessary
+
+        # Fusion of v_in and fi
         v_in = fv
         fused_features = self.fuse(v_in, fi)
 
@@ -251,7 +249,9 @@ class DeepVIO(nn.Module):
         # Image Size 256x512, specified in args. 3 channels, 11 sequence length, batch size 16
         # img shape, imu shape torch.Size([16, 11, 3, 256, 512]) torch.Size([16, 101, 6])
         fv, fi = self.Feature_net(img, imu)
-        print("video features, imu features", fv.shape, fi.shape)
+        
+        
+        # video features, imu features torch.Size([16, 10, 512]) torch.Size([16, 10, 256])
         batch_size = fv.shape[0]
         seq_len = fv.shape[1]
 
