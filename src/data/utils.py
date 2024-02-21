@@ -191,6 +191,8 @@ def computeOverallErr(seq_err):
     ave_r_err = r_err / seq_len
     return ave_t_err, ave_r_err
 
+# With the 3x4 transformation matrix, we add 1 row to the bottom, making it a 
+# 4x4 homogeneous Matrix
 def read_pose(line):
     '''
     Reading 4x4 pose matrix from .txt files
@@ -200,7 +202,12 @@ def read_pose(line):
     values= np.reshape(np.array([float(value) for value in line.split(' ')]), (3, 4))
     Rt = np.concatenate((values, np.array([[0, 0, 0, 1]])), 0)
     return Rt
-    
+   
+# Poses information is stored as a N x 12 table, where N is the number of
+# frames of this sequence. Row i represents the i'th pose of the left camera
+# coordinate system (i.e., z pointing forwards) via a 3x4 transformation
+# matrix.
+
 def read_pose_from_text(path):
     with open(path) as f:
         lines = [line.split('\n')[0] for line in f.readlines()]
@@ -261,7 +268,7 @@ class ToTensor(object):
     def __call__(self, images, imus, gts):
         tensors = []
         for im in images:
-            tensors.append(TF.to_tensor(im.copy)- 0.5)
+            tensors.append(TF.to_tensor(im.copy())- 0.5)
         tensors = torch.stack(tensors, 0)
         return tensors, imus, gts
     def __repr__(self):

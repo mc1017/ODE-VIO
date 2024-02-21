@@ -89,11 +89,11 @@ def update_status(ep, args, model):
 def train(model, optimizer, train_loader, selection, temp, logger, ep, p=0.5, weighted=False):
     
     mse_losses = []
-    penalties = []
+    penalties = [0]
     data_len = len(train_loader)
 
     for i, (imgs, imus, gts, rot, weight) in enumerate(train_loader):
-
+        # imgs.shape, imus.shape = torch.Size([16, 11, 3, 256, 512]), torch.Size([16, 101, 6])
         imgs = imgs.cuda().float()
         imus = imus.cuda().float()
         gts = gts.cuda().float() 
@@ -101,8 +101,8 @@ def train(model, optimizer, train_loader, selection, temp, logger, ep, p=0.5, we
 
         optimizer.zero_grad()
                 
-        poses, decisions, probs, _ = model(imgs, imus, is_first=True, hc=None, temp=temp, selection=selection, p=p)
-        
+        # poses, decisions, probs, _ = model(imgs, imus, is_first=True, hc=None, temp=temp, selection=selection, p=p)
+        poses = model(imgs, imus, is_first=True, hc=None, temp=temp, selection=selection, p=p)
         if not weighted:
             angle_loss = torch.nn.functional.mse_loss(poses[:,:,:3], gts[:, :, :3])
             translation_loss = torch.nn.functional.mse_loss(poses[:,:,3:], gts[:, :, 3:])
@@ -112,19 +112,20 @@ def train(model, optimizer, train_loader, selection, temp, logger, ep, p=0.5, we
             translation_loss = (weight.unsqueeze(-1).unsqueeze(-1) * (poses[:,:,3:] - gts[:, :, 3:]) ** 2).mean()
         
         pose_loss = 100 * angle_loss + translation_loss        
-        penalty = (decisions[:,:,0].float()).sum(-1).mean()
-        loss = pose_loss + args.Lambda * penalty 
-        
+        # penalty = (decisions[:,:,0].float()).sum(-1).mean()
+        # loss = pose_loss + args.Lambda * penalty 
+        loss = pose_loss
         loss.backward()
         optimizer.step()
         
         if i % args.print_frequency == 0: 
-            message = f'Epoch: {ep}, iters: {i}/{data_len}, pose loss: {pose_loss.item():.6f}, penalty: {penalty.item():.6f}, loss: {loss.item():.6f}'
+            # message = f'Epoch: {ep}, iters: {i}/{data_len}, pose loss: {pose_loss.item():.6f}, penalty: {penalty.item():.6f}, loss: {loss.item():.6f}'
+            message = f'Epoch: {ep}, iters: {i}/{data_len}, pose loss: {pose_loss.item():.6f}, loss: {loss.item():.6f}'
             print(message)
             logger.info(message)
 
         mse_losses.append(pose_loss.item())
-        penalties.append(penalty.item())
+        # penalties.append(penalty.item())
 
     return np.mean(mse_losses), np.mean(penalties)
 
@@ -196,9 +197,6 @@ def main():
     
     # Initialize the tester
     tester = KITTI_tester(args)
-
-    # Model initialization
-    model = DeepVIO(args)
 
     # Feed model to GPU
     model.cuda(gpu_id)

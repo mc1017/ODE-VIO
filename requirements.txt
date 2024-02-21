@@ -7,3 +7,4 @@ pathlib
 scipy
 matplotlib
 tqdm
+torchdiffeq

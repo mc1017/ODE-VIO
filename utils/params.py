@@ -6,6 +6,15 @@ def set_gpu_ids(args):
 
     if len(gpu_ids) > 0:
         torch.cuda.set_device(gpu_ids[0])
+        
+    # Check if CUDA is available
+    if torch.cuda.is_available():
+        print("CUDA is available.")
+        # Get the current default CUDA device
+        current_device = torch.cuda.current_device()
+        print("Current CUDA Device:", torch.cuda.get_device_name(current_device))
+    else:
+        print("CUDA is not available. Using CPU.")
     return gpu_ids[0]
 
         

@@ -5,6 +5,7 @@ from torch.nn.init import kaiming_normal_, orthogonal_
 import numpy as np
 from torch.distributions.utils import broadcast_all, probs_to_logits, logits_to_probs, lazy_property, clamp_probs
 import torch.nn.functional as F
+from torchdiffeq import odeint
 
 
 def conv(batchNorm, in_planes, out_planes, kernel_size=3, stride=1, dropout=0):
@@ -171,6 +172,7 @@ class Pose_RNN(nn.Module):
             prev = (prev[0].transpose(1, 0).contiguous(), prev[1].transpose(1, 0).contiguous())
         
         # Select between fv and fv_alter
+        # The first element of decision determines whether to use fv and last element determine to use fv_alter
         v_in = fv * dec[:, :, :1] + fv_alter * dec[:, :, -1:] if fv_alter is not None else fv
         fused = self.fuse(v_in, fi)
         
@@ -179,7 +181,58 @@ class Pose_RNN(nn.Module):
         pose = self.regressor(out)
 
         hc = (hc[0].transpose(1, 0).contiguous(), hc[1].transpose(1, 0).contiguous())
+        # pose.shape = [16, 1, 6]
+        # hc[0].shape, hc[1].shape = (16, 2, 1024), (16, 2, 1024)
         return pose, hc
+    
+# ODE Function for Neural ODE
+class ODEFunc(nn.Module):
+    def __init__(self, hidden_dim):
+        super(ODEFunc, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Tanh(),
+            nn.Linear(hidden_dim, hidden_dim),
+        )
+
+    def forward(self, t, x):
+        return self.net(x)
+    
+# The pose estimation network
+class Pose_ODE(nn.Module):
+    def __init__(self, opt):
+        super(Pose_ODE, self).__init__()
+
+        # The main RNN network
+        self.f_len = opt.v_f_len + opt.i_f_len
+        self.ode_func = ODEFunc(hidden_dim=self.f_len)
+        self.fuse = Fusion_module(opt)
+
+        # The output networks
+        self.regressor = nn.Sequential(
+            nn.Linear(self.f_len, 128),
+            nn.LeakyReLU(0.1, inplace=True),
+            nn.Linear(128, 6))
+
+    def forward(self, fv, fv_alter, fi, dec, prev=None):
+        
+        # Select between fv and fv_alter
+        # The first element of decision determines whether to use fv and last element determine to use fv_alter
+        # Here we'd typically preprocess inputs to be compatible with continuous dynamics, if necessary
+        v_in = fv
+        fused_features = self.fuse(v_in, fi)
+
+        # Initial state for ODE solver, potentially replacing zeros with a more meaningful initial state
+        batch_size, seq_len, _ = fused_features.shape
+        # if prev is not None:
+        #     print('Prev:, ', prev.shape, prev)
+        initial_state = prev if prev is not None else torch.zeros(batch_size, self.f_len).to(fused_features.device)
+
+        # Integrate over a continuous interval, here simplistically [0, 1], but should be adapted based on the actual dynamics and scale
+        integrated_states = odeint(self.ode_func, initial_state, torch.tensor([0, 1], dtype=torch.float32).to(fused_features.device), method='dopri5')[-1]
+        pose = self.regressor(integrated_states).unsqueeze(1)
+        # print("Poses: ", pose.shape)
+        return pose, integrated_states
 
 
 
@@ -188,15 +241,17 @@ class DeepVIO(nn.Module):
         super(DeepVIO, self).__init__()
 
         self.Feature_net = Encoder(opt)
-        self.Pose_net = Pose_RNN(opt)
+        self.Pose_net = Pose_ODE(opt)
         self.Policy_net = PolicyNet(opt)
         self.opt = opt
         
         initialization(self)
 
     def forward(self, img, imu, is_first=True, hc=None, temp=5, selection='gumbel-softmax', p=0.5):
-
+        # Image Size 256x512, specified in args. 3 channels, 11 sequence length, batch size 16
+        # img shape, imu shape torch.Size([16, 11, 3, 256, 512]) torch.Size([16, 101, 6])
         fv, fi = self.Feature_net(img, imu)
+        print("video features, imu features", fv.shape, fi.shape)
         batch_size = fv.shape[0]
         seq_len = fv.shape[1]
 
@@ -205,37 +260,37 @@ class DeepVIO(nn.Module):
         fv_alter = torch.zeros_like(fv) # zero padding in the paper, can be replaced by other 
         
         for i in range(seq_len):
-            if i == 0 and is_first:
+            # if i == 0 and is_first:
                 # The first relative pose is estimated by both images and imu by default
-                pose, hc = self.Pose_net(fv[:, i:i+1, :], None, fi[:, i:i+1, :], None, hc)
-            else:
-                if selection == 'gumbel-softmax':
-                    # Otherwise, sample the decision from the policy network
-                    p_in = torch.cat((fi[:, i, :], hidden), -1)
-                    logit, decision = self.Policy_net(p_in.detach(), temp)
-                    decision = decision.unsqueeze(1)
-                    logit = logit.unsqueeze(1)
-                    pose, hc = self.Pose_net(fv[:, i:i+1, :], fv_alter[:, i:i+1, :], fi[:, i:i+1, :], decision, hc)
-                    decisions.append(decision)
-                    logits.append(logit)
-                elif selection == 'random':
-                    decision = (torch.rand(fv.shape[0], 1, 2) < p).float()
-                    decision[:,:,1] = 1-decision[:,:,0]
-                    decision = decision.to(fv.device)
-                    logit = 0.5*torch.ones((fv.shape[0], 1, 2)).to(fv.device)
-                    pose, hc = self.Pose_net(fv[:, i:i+1, :], fv_alter[:, i:i+1, :], fi[:, i:i+1, :], decision, hc)
-                    decisions.append(decision)
-                    logits.append(logit)
+            pose, hc = self.Pose_net(fv[:, i:i+1, :], None, fi[:, i:i+1, :], None, prev=hc)
+            # else:
+            #     if selection == 'gumbel-softmax':
+            #         # Otherwise, sample the decision from the policy network
+            #         p_in = torch.cat((fi[:, i, :], hidden), -1)
+            #         logit, decision = self.Policy_net(p_in.detach(), temp)
+            #         decision = decision.unsqueeze(1)
+            #         logit = logit.unsqueeze(1)
+            #         pose, hc = self.Pose_net(fv[:, i:i+1, :], fv_alter[:, i:i+1, :], fi[:, i:i+1, :], decision, hc)
+            #         decisions.append(decision)
+            #         logits.append(logit)
+            #     elif selection == 'random':
+            #         decision = (torch.rand(fv.shape[0], 1, 2) < p).float()
+            #         decision[:,:,1] = 1-decision[:,:,0]
+            #         decision = decision.to(fv.device)
+            #         logit = 0.5*torch.ones((fv.shape[0], 1, 2)).to(fv.device)
+            #         pose, hc = self.Pose_net(fv[:, i:i+1, :], fv_alter[:, i:i+1, :], fi[:, i:i+1, :], decision, hc)
+            #         decisions.append(decision)
+            #         logits.append(logit)
             poses.append(pose)
-            hidden = hc[0].contiguous()[:, -1, :]
+            # hidden = hc[0].contiguous()[:, -1, :]
 
         poses = torch.cat(poses, dim=1)
-        decisions = torch.cat(decisions, dim=1)
-        logits = torch.cat(logits, dim=1)
-        probs = torch.nn.functional.softmax(logits, dim=-1)
+        # decisions = torch.cat(decisions, dim=1)
+        # logits = torch.cat(logits, dim=1)
+        # probs = torch.nn.functional.softmax(logits, dim=-1)
 
-        return poses, decisions, probs, hc
-
+        # return poses, decisions, probs, hc
+        return poses
 
 def initialization(net):
     #Initilization
