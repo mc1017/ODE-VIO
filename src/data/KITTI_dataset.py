@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import Dataset
 import scipy.io as sio
 from pathlib import Path
-from src.data.utils import rotationError, read_pose_from_text
+from src.data.utils import rotationError, read_pose_from_text, read_time_from_text
 from collections import Counter
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal.windows import triang
@@ -31,7 +31,11 @@ class KITTI(Dataset):
         sequence_set = []
         
         for folder in self.train_seqs:
+            # Extraact pose data from text file
             poses, poses_rel = read_pose_from_text(self.root/'poses/{}.txt'.format(folder))
+            
+            # Extract times information from text file
+            timestamps = read_time_from_text(self.root/'sequences/{}/times.txt'.format(folder))
             
             # Extracts imus data from matlab file with column 'imu_data_interp'
             imus = sio.loadmat(self.root/'imus/{}.mat'.format(folder))['imu_data_interp']
@@ -43,6 +47,9 @@ class KITTI(Dataset):
                 img_samples = fpaths[i:i+self.sequence_length]
                 # img_samples = no. sequence_len images
                 
+                timestamps_samples = timestamps[i:i+self.sequence_length]
+                # timestamps_samples.shape = (11, 1)
+                
                 imu_samples = imus[i*IMU_FREQ:(i+self.sequence_length-1)*IMU_FREQ+1]
                 # imu_samples.shape = (101, 6), (i+self.sequence_length-1)*IMU_FREQ+1 = (0 + 11 - 1) * 10 + 1
                 
@@ -51,7 +58,7 @@ class KITTI(Dataset):
                 
                 pose_rel_samples = poses_rel[i:i+self.sequence_length-1]
                 segment_rot = rotationError(pose_samples[0], pose_samples[-1])
-                sample = {'imgs': img_samples, 'imus': imu_samples, 'gts': pose_rel_samples, 'rot': segment_rot}
+                sample = {'imgs': img_samples, 'imus': imu_samples, 'gts': pose_rel_samples, 'rot': segment_rot, 'timestamps': timestamps_samples}
                 sequence_set.append(sample)
         self.samples = sequence_set
 
@@ -73,17 +80,17 @@ class KITTI(Dataset):
     def __getitem__(self, index):
         sample = self.samples[index]
         imgs = [np.asarray(Image.open(img)) for img in sample['imgs']]
+        imus = np.copy(sample['imus'])
+        gts = np.copy(sample['gts']).astype(np.float32)
+        timestamps = np.copy(sample['timestamps']).astype(np.float32)
         
         if self.transform is not None:
-            imgs, imus, gts = self.transform(imgs, np.copy(sample['imus']), np.copy(sample['gts']))
-        else:
-            imus = np.copy(sample['imus'])
-            gts = np.copy(sample['gts']).astype(np.float32)
+            imgs, imus, gts, timestamps = self.transform(imgs, imus, gts, timestamps)
         
         rot = sample['rot'].astype(np.float32)
         weight = self.weights[index]
 
-        return imgs, imus, gts, rot, weight
+        return imgs, imus, gts, rot, weight, timestamps
 
     def __len__(self):
         return len(self.samples)

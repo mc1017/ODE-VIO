@@ -3,6 +3,7 @@ import torch
 import numpy as np
 from pathlib import Path
 import math
+import inspect
 from src.data.KITTI_dataset import KITTI
 from src.data.utils import *
 from src.data.KITTI_eval import KITTI_tester
@@ -92,17 +93,18 @@ def train(model, optimizer, train_loader, selection, temp, logger, ep, p=0.5, we
     penalties = [0]
     data_len = len(train_loader)
 
-    for i, (imgs, imus, gts, rot, weight) in enumerate(train_loader):
+    for i, (imgs, imus, gts, rot, weight, timestamps) in enumerate(train_loader):
         # imgs.shape, imus.shape = torch.Size([16, 11, 3, 256, 512]), torch.Size([16, 101, 6])
         imgs = imgs.cuda().float()
         imus = imus.cuda().float()
-        gts = gts.cuda().float() 
+        gts = gts.cuda().float()
         weight = weight.cuda().float()
+        timestamps = timestamps.cuda().float()
 
         optimizer.zero_grad()
                 
         # poses, decisions, probs, _ = model(imgs, imus, is_first=True, hc=None, temp=temp, selection=selection, p=p)
-        poses = model(imgs, imus, is_first=True, hc=None, temp=temp, selection=selection, p=p)
+        poses = model(imgs, imus, timestamps, is_first=True, hc=None, temp=temp, selection=selection, p=p)
         if not weighted:
             angle_loss = torch.nn.functional.mse_loss(poses[:,:,:3], gts[:, :, :3])
             translation_loss = torch.nn.functional.mse_loss(poses[:,:,3:], gts[:, :, 3:])
@@ -136,6 +138,8 @@ def evaluate(model, tester, ep):
     with torch.no_grad(): 
         model.eval()
         errors = tester.eval(model, selection='gumbel-softmax', num_gpu=1)
+        tester.generate_plots(checkpoints_dir, ep)
+        
 
     t_rel = np.mean([errors[i]['t_rel'] for i in range(len(errors))])
     r_rel = np.mean([errors[i]['r_rel'] for i in range(len(errors))])
@@ -162,7 +166,8 @@ def main():
     if args.color:
         transform_train += [RandomColorAug()]
     transform_train = Compose(transform_train)
-
+    signature = inspect.signature(Compose.__call__)
+    print(signature)
     train_dataset = KITTI(args.data_dir,
                         sequence_length=args.seq_len,
                         train_seqs=args.train_seq,
@@ -173,7 +178,7 @@ def main():
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.batch_size,
-        shuffle=True,
+        shuffle=False, # Need to set False because time must be strictly increasing for ode integration. TODO: check if batch shuffling is a thing
         num_workers=args.workers,
         pin_memory=True
     )
@@ -228,8 +233,9 @@ def main():
         print(message)
         logger.info(message)
         
-        if ep > args.epochs_warmup+args.epochs_joint:
-            evaluate(model, tester, ep)
+        
+        # if ep > args.epochs_warmup+args.epochs_joint:
+        evaluate(model, tester, ep)
     
     message = f'Training finished, best t_rel: {best:.4f}'
     logger.info(message)

@@ -224,6 +224,14 @@ def read_pose_from_text(path):
         
     return poses_abs, poses_rel
 
+def read_time_from_text(path):
+    timestamps = []
+    with open(path) as f:
+        for line in f.readlines():
+            t = float(line)
+            timestamps.append(t)
+    return timestamps
+
 def saveSequence(poses, file_name):
     with open(file_name, 'w') as f:
         for pose in poses:
@@ -236,10 +244,11 @@ class Compose(object):
     def __init__(self, transforms):
         self.transforms = transforms
 
-    def __call__(self, images, imus, intrinsics):
+    def __call__(self, images, imus, intrinsics, timestamps):
         for t in self.transforms:
-            images, imus, intrinsics = t(images, imus, intrinsics)
-        return images, imus, intrinsics
+            images, imus, intrinsics, timestamps = t(images, imus, intrinsics, timestamps)
+        return images, imus, intrinsics, timestamps
+    
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
         for t in self.transforms:
@@ -253,11 +262,11 @@ class Normalize(object):
         self.mean = mean
         self.std = std
 
-    def __call__(self, images, imus, intrinsics):
+    def __call__(self, images, imus, intrinsics, timestamps):
         for tensor in images:
             for t, m, s in zip(tensor, self.mean, self.std):
                 t.sub_(m).div_(s)
-        return images, imus, intrinsics
+        return images, imus, intrinsics, timestamps
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
         format_string += 'mean: {}, '.format(self.mean)
@@ -265,12 +274,12 @@ class Normalize(object):
         return format_string
 
 class ToTensor(object):
-    def __call__(self, images, imus, gts):
+    def __call__(self, images, imus, gts, timestamps):
         tensors = []
         for im in images:
             tensors.append(TF.to_tensor(im.copy())- 0.5)
         tensors = torch.stack(tensors, 0)
-        return tensors, imus, gts
+        return tensors, imus, gts, timestamps
     def __repr__(self):
         return self.__class__.__name__ + '()'
 
@@ -278,10 +287,10 @@ class Resize(object):
     def __init__(self, size=(256, 512)):
         self.size = size
 
-    def __call__(self, images, imus, gts):
+    def __call__(self, images, imus, gts, timestamps):
         tensors = [TF.resize(im, size=self.size) for im in images]
         tensors = torch.stack(tensors, 0)
-        return tensors, imus, gts
+        return tensors, imus, gts, timestamps
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
         format_string += 'img_h: {}, '.format(self.size[0])
@@ -292,7 +301,7 @@ class RandomHorizontalFlip(object):
     """Randomly horizontally flips the given numpy array with a probability of 0.5"""
     def __init__(self, p=0.5):
         self.p = p
-    def __call__(self, images, imus, gts):
+    def __call__(self, images, imus, gts, timestamps):
         if random.random() < self.p:
             tensors = [TF.hflip(im) for im in images]
             tensors = torch.stack(tensors, 0)
@@ -301,7 +310,7 @@ class RandomHorizontalFlip(object):
             gts[:, 1], gts[:, 2], gts[:, 3] = -gts[:, 1], -gts[:, 2], -gts[:, 3]
         else:
             tensors = images
-        return tensors, imus, gts
+        return tensors, imus, gts, timestamps
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
         format_string += 'p: {})'.format(self.p)
@@ -316,7 +325,7 @@ class RandomColorAug(object):
         self.color_low = augment_parameters[4]  # 0.8
         self.color_high = augment_parameters[5]  # 1.2
         self.p = p
-    def __call__(self, images, imus, gts):
+    def __call__(self, images, imus, gts, timestamps):
         if random.random() < self.p:
             images = images + 0.5
             random_gamma = np.random.uniform(self.gamma_low, self.gamma_high)
@@ -339,7 +348,7 @@ class RandomColorAug(object):
         else:
             img_aug = images
 
-        return img_aug, imus, gts
+        return img_aug, imus, gts, timestamps
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
         format_string += 'gamma: {}-{}, '.format(self.gamma_low, self.gamma_high)

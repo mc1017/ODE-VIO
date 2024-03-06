@@ -214,7 +214,7 @@ class Pose_ODE(nn.Module):
             nn.LeakyReLU(0.1, inplace=True),
             nn.Linear(128, 6))
 
-    def forward(self, fv, fv_alter, fi, dec, prev=None):
+    def forward(self, fv, fv_alter, fi, dec, ts, prev=None):
 
         # Fusion of v_in and fi
         v_in = fv
@@ -226,8 +226,10 @@ class Pose_ODE(nn.Module):
         #     print('Prev:, ', prev.shape, prev)
         initial_state = prev if prev is not None else torch.zeros(batch_size, self.f_len).to(fused_features.device)
 
-        # Integrate over a continuous interval, here simplistically [0, 1], but should be adapted based on the actual dynamics and scale
-        integrated_states = odeint(self.ode_func, initial_state, torch.tensor([0, 1], dtype=torch.float32).to(fused_features.device), method='dopri5')[-1]
+        # Incorporated time, but using dopri5 result in NaNs. Use fixed step size
+        # fixed_adams https://github.com/rtqichen/torchdiffeq/issues/27
+        print(ts)
+        integrated_states = odeint(self.ode_func, initial_state, ts, method='fixed_adams')[-1]
         pose = self.regressor(integrated_states).unsqueeze(1)
         # print("Poses: ", pose.shape)
         return pose, integrated_states
@@ -245,7 +247,7 @@ class DeepVIO(nn.Module):
         
         initialization(self)
 
-    def forward(self, img, imu, is_first=True, hc=None, temp=5, selection='gumbel-softmax', p=0.5):
+    def forward(self, img, imu, timestamps, is_first=True, hc=None, temp=5, selection='gumbel-softmax', p=0.5):
         # Image Size 256x512, specified in args. 3 channels, 11 sequence length, batch size 16
         # img shape, imu shape torch.Size([16, 11, 3, 256, 512]) torch.Size([16, 101, 6])
         fv, fi = self.Feature_net(img, imu)
@@ -262,7 +264,7 @@ class DeepVIO(nn.Module):
         for i in range(seq_len):
             # if i == 0 and is_first:
                 # The first relative pose is estimated by both images and imu by default
-            pose, hc = self.Pose_net(fv[:, i:i+1, :], None, fi[:, i:i+1, :], None, prev=hc)
+            pose, hc = self.Pose_net(fv[:, i:i+1, :], None, fi[:, i:i+1, :], None, timestamps[:, i:i+1].squeeze(1), prev=hc)
             # else:
             #     if selection == 'gumbel-softmax':
             #         # Otherwise, sample the decision from the policy network
