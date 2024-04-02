@@ -15,6 +15,8 @@ from scipy.ndimage import convolve1d
 
 IMU_FREQ = 10
 
+
+
 class KITTI(Dataset):
     def __init__(self, root,
                  sequence_length=11,
@@ -48,6 +50,8 @@ class KITTI(Dataset):
                 # img_samples = no. sequence_len images
                 
                 timestamps_samples = timestamps[i:i+self.sequence_length]
+                assert len(img_samples) == len(timestamps_samples)
+                assert all(x < y for x, y in zip(timestamps, timestamps[1:])) # Check if timestamps are in ascending order
                 # timestamps_samples.shape = (11, 1)
                 
                 imu_samples = imus[i*IMU_FREQ:(i+self.sequence_length-1)*IMU_FREQ+1]
@@ -61,7 +65,10 @@ class KITTI(Dataset):
                 sample = {'imgs': img_samples, 'imus': imu_samples, 'gts': pose_rel_samples, 'rot': segment_rot, 'timestamps': timestamps_samples}
                 sequence_set.append(sample)
         self.samples = sequence_set
-
+        print("len_smaples", len(self.samples))
+        for sample in self.samples:
+            # print(sample['timestamps'])
+            assert np.all(np.diff(sample['timestamps']) > 0), "Timestamps must be strictly ascending - make_dataset"
         
         # Generate weights based on the rotation of the training segments
         # Weights are calculated based on the histogram of rotations according to the method in https://github.com/YyzHarry/imbalanced-regression
@@ -83,10 +90,12 @@ class KITTI(Dataset):
         imus = np.copy(sample['imus'])
         gts = np.copy(sample['gts']).astype(np.float32)
         timestamps = np.copy(sample['timestamps']).astype(np.float32)
-        
+
         if self.transform is not None:
             imgs, imus, gts, timestamps = self.transform(imgs, imus, gts, timestamps)
-        
+        assert np.all(np.diff(timestamps) > 0), "Timestamps must be strictly ascending - getitem"
+        # print("Passed Getitem")
+         
         rot = sample['rot'].astype(np.float32)
         weight = self.weights[index]
 

@@ -92,14 +92,21 @@ def train(model, optimizer, train_loader, selection, temp, logger, ep, p=0.5, we
     mse_losses = []
     penalties = [0]
     data_len = len(train_loader)
-
     for i, (imgs, imus, gts, rot, weight, timestamps) in enumerate(train_loader):
+        differences = timestamps[1:] - timestamps[:-1]
+        assert torch.all(differences > 0), "Timestamps are not strictly ascending" # Check if timestamps are in ascending order
+        # print('checked')
+    print('Timestamps are strictly ascending')
+    
+    for i, (imgs, imus, gts, rot, weight, timestamps) in enumerate(train_loader):
+       
         # imgs.shape, imus.shape = torch.Size([16, 11, 3, 256, 512]), torch.Size([16, 101, 6])
         imgs = imgs.cuda().float()
         imus = imus.cuda().float()
         gts = gts.cuda().float()
         weight = weight.cuda().float()
         timestamps = timestamps.cuda().float()
+        
 
         optimizer.zero_grad()
                 

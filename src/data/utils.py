@@ -230,6 +230,8 @@ def read_time_from_text(path):
         for line in f.readlines():
             t = float(line)
             timestamps.append(t)
+    # print(timestamps)
+    assert all(x < y for x, y in zip(timestamps, timestamps[1:]))
     return timestamps
 
 def saveSequence(poses, file_name):
