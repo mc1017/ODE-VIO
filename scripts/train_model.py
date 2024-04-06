@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 import math
 import inspect
-from src.data.KITTI_dataset import KITTI
+from src.data.KITTI_dataset import KITTI, SequenceBoundarySampler
 from src.data.utils import *
 from src.data.KITTI_eval import KITTI_tester
 from src.models.NeuralODE import DeepVIO
@@ -13,7 +13,7 @@ from utils.utils import setup_experiment_directories, setup_logger
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--data_dir', type=str, default='/mnt/data0/marco/Visual-Selective-VIO/data', help='path to the dataset')
+parser.add_argument('--data_dir', type=str, default='/mnt/data0/marco/KITTI/data', help='path to the dataset')
 parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
 parser.add_argument('--save_dir', type=str, default='./results', help='path to save the result')
 
@@ -92,11 +92,6 @@ def train(model, optimizer, train_loader, selection, temp, logger, ep, p=0.5, we
     mse_losses = []
     penalties = [0]
     data_len = len(train_loader)
-    for i, (imgs, imus, gts, rot, weight, timestamps) in enumerate(train_loader):
-        differences = timestamps[1:] - timestamps[:-1]
-        assert torch.all(differences > 0), "Timestamps are not strictly ascending" # Check if timestamps are in ascending order
-        # print('checked')
-    print('Timestamps are strictly ascending')
     
     for i, (imgs, imus, gts, rot, weight, timestamps) in enumerate(train_loader):
        
@@ -174,7 +169,8 @@ def main():
         transform_train += [RandomColorAug()]
     transform_train = Compose(transform_train)
     signature = inspect.signature(Compose.__call__)
-    print(signature)
+    print(signature) # Check arguments
+    
     train_dataset = KITTI(args.data_dir,
                         sequence_length=args.seq_len,
                         train_seqs=args.train_seq,
@@ -182,12 +178,13 @@ def main():
                         )
     logger.info('train_dataset: ' + str(train_dataset))
     
+    # Using batch sampler here to preserve the sequence boundaries, preventing non-ascending timestamps
+    batch_sampler = SequenceBoundarySampler(args.data_dir, batch_size=args.batch_size)
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
-        batch_size=args.batch_size,
-        shuffle=False, # Need to set False because time must be strictly increasing for ode integration. TODO: check if batch shuffling is a thing
         num_workers=args.workers,
-        pin_memory=True
+        pin_memory=True,
+        batch_sampler=batch_sampler
     )
     
     # GPU selections
@@ -239,7 +236,6 @@ def main():
         message = f'Epoch {ep} training finished, pose loss: {avg_pose_loss:.6f}, penalty_loss: {avg_penalty_loss:.6f}, model saved'
         print(message)
         logger.info(message)
-        
         
         # if ep > args.epochs_warmup+args.epochs_joint:
         evaluate(model, tester, ep)

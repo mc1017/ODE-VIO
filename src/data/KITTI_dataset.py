@@ -4,7 +4,7 @@ import os
 import numpy as np
 from PIL import Image
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, BatchSampler
 import scipy.io as sio
 from pathlib import Path
 from src.data.utils import rotationError, read_pose_from_text, read_time_from_text
@@ -130,6 +130,42 @@ def get_lds_kernel_window(kernel, ks, sigma):
         kernel_window = list(map(laplace, np.arange(-half_ks, half_ks + 1))) / max(map(laplace, np.arange(-half_ks, half_ks + 1)))
 
     return kernel_window
+
+class SequenceBoundarySampler(BatchSampler):
+    def __init__(self, root, batch_size,  train_seqs=['00', '01', '02', '04', '06', '08', '09']):
+        self.root = Path(root)
+        self.sequence_lengths = self._find_sequence_lengths(train_seqs)
+        self.batch_size = batch_size
+        self.batches = self._create_batches()
+    
+
+    def _find_sequence_lengths(self, train_seqs):
+        sequence_lengths = []
+        for seq in train_seqs:
+            fpaths = sorted((self.root/'sequences/{}/image_2'.format(seq)).glob("*.png"))
+            sequence_lengths.append(len(fpaths))
+        return sequence_lengths
+        
+    def _create_batches(self):
+        batches = []
+        batch = []
+        for seq_idx, seq_length in enumerate(self.sequence_lengths):
+            for _ in range(seq_length):
+                batch.append((seq_idx, len(batch)))  # (sequence index, element index within the batch)
+                if len(batch) == self.batch_size:
+                    batches.append(batch)
+                    batch = []
+            if batch:
+                batches.append(batch)
+                batch = []
+        return batches
+
+    def __iter__(self):
+        for batch in self.batches:
+            yield [idx for _, idx in batch]
+
+    def __len__(self):
+        return len(self.batches)
 
 
 

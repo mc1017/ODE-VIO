@@ -228,7 +228,6 @@ class Pose_ODE(nn.Module):
 
         # Incorporated time, but using dopri5 result in NaNs. Use fixed step size
         # fixed_adams https://github.com/rtqichen/torchdiffeq/issues/27
-        print(ts)
         integrated_states = odeint(self.ode_func, initial_state, ts, method='fixed_adams')[-1]
         pose = self.regressor(integrated_states).unsqueeze(1)
         # print("Poses: ", pose.shape)
@@ -260,7 +259,6 @@ class DeepVIO(nn.Module):
         poses, decisions, logits= [], [], []
         hidden = torch.zeros(batch_size, self.opt.rnn_hidden_size).to(fv.device) if hc is None else hc[0].contiguous()[:, -1, :]
         fv_alter = torch.zeros_like(fv) # zero padding in the paper, can be replaced by other 
-        assert all(x < y for x, y in zip(timestamps, timestamps[1:])) # Check if timestamps are in ascending order 
         for i in range(seq_len):
             # if i == 0 and is_first:
                 # The first relative pose is estimated by both images and imu by default
