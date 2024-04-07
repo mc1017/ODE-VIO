@@ -106,7 +106,7 @@ def train(model, optimizer, train_loader, selection, temp, logger, ep, p=0.5, we
         optimizer.zero_grad()
                 
         # poses, decisions, probs, _ = model(imgs, imus, is_first=True, hc=None, temp=temp, selection=selection, p=p)
-        poses = model(imgs, imus, timestamps, is_first=True, hc=None, temp=temp, selection=selection, p=p)
+        poses, _ = model(imgs, imus, timestamps, is_first=True, hc=None, temp=temp, selection=selection, p=p)
         if not weighted:
             angle_loss = torch.nn.functional.mse_loss(poses[:,:,:3], gts[:, :, :3])
             translation_loss = torch.nn.functional.mse_loss(poses[:,:,3:], gts[:, :, 3:])
@@ -133,7 +133,7 @@ def train(model, optimizer, train_loader, selection, temp, logger, ep, p=0.5, we
 
     return np.mean(mse_losses), np.mean(penalties)
 
-def evaluate(model, tester, ep):
+def evaluate(model, tester, ep, best):
     # Evaluate the model
     print('Evaluating the model')
     logger.info('Evaluating the model')
@@ -156,6 +156,7 @@ def evaluate(model, tester, ep):
     message = f'Epoch {ep} evaluation finished , t_rel: {t_rel:.4f}, r_rel: {r_rel:.4f}, t_rmse: {t_rmse:.4f}, r_rmse: {r_rmse:.4f}, usage: {usage:.4f}, best t_rel: {best:.4f}'
     logger.info(message)
     print(message)
+    return best
 
 
 def main():
@@ -238,7 +239,7 @@ def main():
         logger.info(message)
         
         # if ep > args.epochs_warmup+args.epochs_joint:
-        evaluate(model, tester, ep)
+        best = evaluate(model, tester, ep, best)
     
     message = f'Training finished, best t_rel: {best:.4f}'
     logger.info(message)

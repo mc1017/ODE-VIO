@@ -257,7 +257,7 @@ class DeepVIO(nn.Module):
         seq_len = fv.shape[1]
 
         poses, decisions, logits= [], [], []
-        hidden = torch.zeros(batch_size, self.opt.rnn_hidden_size).to(fv.device) if hc is None else hc[0].contiguous()[:, -1, :]
+        # hidden = torch.zeros(batch_size, self.opt.rnn_hidden_size).to(fv.device) if hc is None else hc[0].contiguous()[:, -1, :]
         fv_alter = torch.zeros_like(fv) # zero padding in the paper, can be replaced by other 
         for i in range(seq_len):
             # if i == 0 and is_first:
@@ -290,7 +290,7 @@ class DeepVIO(nn.Module):
         # probs = torch.nn.functional.softmax(logits, dim=-1)
 
         # return poses, decisions, probs, hc
-        return poses
+        return poses, hc
 
 def initialization(net):
     #Initilization
