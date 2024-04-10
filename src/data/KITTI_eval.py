@@ -38,7 +38,7 @@ class data_partition():
         while start + self.seq_len < n_frames:
             self.img_paths_list.append(self.img_paths[start:start + self.seq_len])
             self.poses_list.append(self.poses_rel[start:start + self.seq_len - 1])
-            self.timestamps_list.append(self.timestamps[start:start + self.seq_len - 1])
+            self.timestamps_list.append(self.timestamps[start:start + self.seq_len])
             self.imus_list.append(self.imus[start * 10:(start + self.seq_len - 1) * 10 + 1])
             start += self.seq_len - 1
         self.img_paths_list.append(self.img_paths[start:])
@@ -80,9 +80,9 @@ class KITTI_tester():
         hc = None
         pose_list, decision_list, probs_list= [], [], []
         for i, (image_seq, imu_seq, gt_seq, ts_seq) in tqdm(enumerate(df), total=len(df), smoothing=0.9):  
-            x_in = image_seq.unsqueeze(0).repeat(num_gpu,1,1,1,1).cuda()
-            i_in = imu_seq.unsqueeze(0).repeat(num_gpu,1,1).cuda()
-            t_in = ts_seq.unsqueeze(0).repeat(num_gpu,1).cuda()
+            x_in = image_seq.unsqueeze(0).cuda().float()
+            i_in = imu_seq.unsqueeze(0).cuda().float()
+            t_in = ts_seq.unsqueeze(0).cuda().float()
             with torch.no_grad():
                 pose, hc = net(x_in, i_in, t_in, is_first=(i==0), hc=hc, selection=selection, p=p)
             pose_list.append(pose[0,:,:].detach().cpu().numpy())

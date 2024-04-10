@@ -45,7 +45,7 @@ class KITTI(Dataset):
             # Use glob method to find .png files
             fpaths = sorted((self.root/'sequences/{}/image_2'.format(folder)).glob("*.png"))
             
-            for i in range(len(fpaths)-self.sequence_length):
+            for i in range(0, len(fpaths)-self.sequence_length):
                 img_samples = fpaths[i:i+self.sequence_length]
                 # img_samples = no. sequence_len images
                 

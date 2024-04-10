@@ -74,7 +74,11 @@ class Encoder(nn.Module):
         self.inertial_encoder = Inertial_encoder(opt)
 
     def forward(self, img, imu):
+        
+        # img.shape = [16, 11, 3, 256, 512]
         v = torch.cat((img[:, :-1], img[:, 1:]), dim=2)
+        # v.shape = [16, 10, 6, 256, 512]
+        
         batch_size = v.size(0)
         seq_len = v.size(1)
 
@@ -85,7 +89,9 @@ class Encoder(nn.Module):
         v = self.visual_head(v)  # (batch, seq_len, 256)
         
         # IMU CNN
+        # imu.shape = [16, 101, 6]
         imu = torch.cat([imu[:, i * 10:i * 10 + 11, :].unsqueeze(1) for i in range(seq_len)], dim=1)
+        # imu.shape = [16, 10, 11, 6]
         imu = self.inertial_encoder(imu)
         return v, imu
 
@@ -185,6 +191,22 @@ class Pose_RNN(nn.Module):
         # hc[0].shape, hc[1].shape = (16, 2, 1024), (16, 2, 1024)
         return pose, hc
     
+# The RNN cell for Neural ODE in ODE-RNN
+class RNNCell(nn.Module):
+    def __init__(self, opt):
+        super(RNNCell, self).__init__()
+        self.feature_size = opt.v_f_len + opt.i_f_len
+        self.rnn = nn.LSTM(
+            input_size=self.feature_size,
+            hidden_size=opt.rnn_hidden_size,
+            num_layers=2,
+            dropout=opt.rnn_dropout_between,
+            batch_first=True)
+    
+    def forward(self, fused_features):
+        hc = self.rnn(fused_features)
+        
+    
 # ODE Function for Neural ODE
 class ODEFunc(nn.Module):
     def __init__(self, hidden_dim):
@@ -225,13 +247,61 @@ class Pose_ODE(nn.Module):
         # if prev is not None:
         #     print('Prev:, ', prev.shape, prev)
         initial_state = prev if prev is not None else torch.zeros(batch_size, self.f_len).to(fused_features.device)
-
-        # Incorporated time, but using dopri5 result in NaNs. Use fixed step size
-        # fixed_adams https://github.com/rtqichen/torchdiffeq/issues/27
-        integrated_states = odeint(self.ode_func, initial_state, ts, method='fixed_adams')[-1]
+        integrated_states = initial_state
+        
+        for i in range(seq_len):
+            # Incorporated time, but using dopri5 result in NaNs. Use fixed step size
+            # fixed_adams https://github.com/rtqichen/torchdiffeq/issues/27
+            integrated_states = odeint(self.ode_func, integrated_states, ts[i:i+2], method='fixed_adams')[-1]
+        # print(ts.shape)
+        # print(integrated_states.shape)
+        
         pose = self.regressor(integrated_states).unsqueeze(1)
         # print("Poses: ", pose.shape)
         return pose, integrated_states
+    
+class Pose_ODE_RNN(nn.Module):
+    def __init__(self, opt):
+        super(Pose_ODE_RNN, self).__init__()
+
+        # The main ODE network
+        self.f_len = opt.v_f_len + opt.i_f_len
+        self.ode_func = ODEFunc(hidden_dim=self.f_len)
+        self.fuse = Fusion_module(opt)
+        self.rnn_cell = nn.RNNCell(input_size=self.f_len, hidden_size=self.f_len)
+
+        # The output networks
+        self.regressor = nn.Sequential(
+            nn.Linear(self.f_len, 128),
+            nn.LeakyReLU(0.1, inplace=True),
+            nn.Linear(128, 6))
+
+    def forward(self, fv, fv_alter, fi, dec, ts, prev=None):
+
+        # Fusion of v_in and fi
+        v_in = fv
+        fused_features = self.fuse(v_in, fi)
+
+        # Initial state for ODE solver, potentially replacing zeros with a more meaningful initial state
+        # fused_features.shpae = [16, 1, 768]
+        batch_size, seq_len, _ = fused_features.shape
+    
+        integrated_states = prev if prev is not None else torch.zeros(batch_size, self.f_len).to(fused_features.device)
+        
+        # Incorporated time, but using dopri5 result in NaNs. Use fixed step size
+        # fixed_adams https://github.com/rtqichen/torchdiffeq/issues/27
+        ode_solutions = [] 
+        for i in range(batch_size):
+            ode_solution = odeint(self.ode_func, integrated_states[i, :], ts[i, :].squeeze(0), method='fixed_adams')[-1]
+            ode_solutions.append(ode_solution)
+            
+        integrated_states = torch.stack(ode_solutions, dim=0)
+        # fused_features.shape = [16, 1, 768], integrated_states.shape = [16, 768]
+        integrated_states = self.rnn_cell(fused_features.squeeze(1), integrated_states)
+        # integrated_states.shape = [16, 768]     
+        pose = self.regressor(integrated_states)
+        # pose.shape = [16, 6]
+        return pose.unsqueeze(1), integrated_states
 
 
 
@@ -240,7 +310,7 @@ class DeepVIO(nn.Module):
         super(DeepVIO, self).__init__()
 
         self.Feature_net = Encoder(opt)
-        self.Pose_net = Pose_ODE(opt)
+        self.Pose_net = Pose_ODE_RNN(opt)
         self.Policy_net = PolicyNet(opt)
         self.opt = opt
         
@@ -248,11 +318,11 @@ class DeepVIO(nn.Module):
 
     def forward(self, img, imu, timestamps, is_first=True, hc=None, temp=5, selection='gumbel-softmax', p=0.5):
         # Image Size 256x512, specified in args. 3 channels, 11 sequence length, batch size 16
-        # img shape, imu shape torch.Size([16, 11, 3, 256, 512]) torch.Size([16, 101, 6])
+        # img.shape = [16, 11, 3, 256, 512] imu.shape[16, 101, 6]
         fv, fi = self.Feature_net(img, imu)
         
         
-        # video features, imu features torch.Size([16, 10, 512]) torch.Size([16, 10, 256])
+        # fv.shape = [16, 10, 512] fi.shpae =[16, 10, 256]
         batch_size = fv.shape[0]
         seq_len = fv.shape[1]
 
@@ -262,7 +332,10 @@ class DeepVIO(nn.Module):
         for i in range(seq_len):
             # if i == 0 and is_first:
                 # The first relative pose is estimated by both images and imu by default
-            pose, hc = self.Pose_net(fv[:, i:i+1, :], None, fi[:, i:i+1, :], None, timestamps[:, i:i+1].squeeze(1), prev=hc)
+            # print(fv.shape, fi.shape, timestamps.shape)
+            
+            # fv.shape = [16, 10, 512], fi.shape = [16, 10, 256], timestamps.shape = [16, 11]
+            pose, hc = self.Pose_net(fv[:, i:i+1, :], None, fi[:, i:i+1, :], None, timestamps[:, i:i+2], prev=hc)
             # else:
             #     if selection == 'gumbel-softmax':
             #         # Otherwise, sample the decision from the policy network

@@ -101,10 +101,8 @@ def train(model, optimizer, train_loader, selection, temp, logger, ep, p=0.5, we
         gts = gts.cuda().float()
         weight = weight.cuda().float()
         timestamps = timestamps.cuda().float()
-        
 
         optimizer.zero_grad()
-                
         # poses, decisions, probs, _ = model(imgs, imus, is_first=True, hc=None, temp=temp, selection=selection, p=p)
         poses, _ = model(imgs, imus, timestamps, is_first=True, hc=None, temp=temp, selection=selection, p=p)
         if not weighted:
