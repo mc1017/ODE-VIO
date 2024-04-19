@@ -4,6 +4,7 @@ import os
 import numpy as np
 from PIL import Image
 import torch
+import math
 from torch.utils.data import Dataset, BatchSampler
 import scipy.io as sio
 from pathlib import Path
@@ -41,10 +42,10 @@ class KITTI(Dataset):
             
             # Extracts imus data from matlab file with column 'imu_data_interp'
             imus = sio.loadmat(self.root/'imus/{}.mat'.format(folder))['imu_data_interp']
-
+            print(imus)
             # Use glob method to find .png files
             fpaths = sorted((self.root/'sequences/{}/image_2'.format(folder)).glob("*.png"))
-            
+
             for i in range(0, len(fpaths)-self.sequence_length):
                 img_samples = fpaths[i:i+self.sequence_length]
                 # img_samples = no. sequence_len images
@@ -62,13 +63,10 @@ class KITTI(Dataset):
                 
                 pose_rel_samples = poses_rel[i:i+self.sequence_length-1]
                 segment_rot = rotationError(pose_samples[0], pose_samples[-1])
-                sample = {'imgs': img_samples, 'imus': imu_samples, 'gts': pose_rel_samples, 'rot': segment_rot, 'timestamps': timestamps_samples}
+                sample = {'imgs': img_samples, 'imus': imu_samples, 'gts': pose_rel_samples, 'rot': segment_rot, 'timestamps': timestamps_samples, 'folder': folder}
                 sequence_set.append(sample)
         self.samples = sequence_set
         print("len_smaples", len(self.samples))
-        for sample in self.samples:
-            # print(sample['timestamps'])
-            assert np.all(np.diff(sample['timestamps']) > 0), "Timestamps must be strictly ascending - make_dataset"
         
         # Generate weights based on the rotation of the training segments
         # Weights are calculated based on the histogram of rotations according to the method in https://github.com/YyzHarry/imbalanced-regression
@@ -90,6 +88,7 @@ class KITTI(Dataset):
         imus = np.copy(sample['imus'])
         gts = np.copy(sample['gts']).astype(np.float32)
         timestamps = np.copy(sample['timestamps']).astype(np.float32)
+        folder = sample['folder']
 
         if self.transform is not None:
             imgs, imus, gts, timestamps = self.transform(imgs, imus, gts, timestamps)
@@ -99,7 +98,7 @@ class KITTI(Dataset):
         rot = sample['rot'].astype(np.float32)
         weight = self.weights[index]
 
-        return imgs, imus, gts, rot, weight, timestamps
+        return imgs, imus, gts, rot, weight, timestamps, folder
 
     def __len__(self):
         return len(self.samples)
@@ -131,33 +130,41 @@ def get_lds_kernel_window(kernel, ks, sigma):
 
     return kernel_window
 
+# To create sequence batch sampler that does not batch across samples from other sequnces. 
 class SequenceBoundarySampler(BatchSampler):
-    def __init__(self, root, batch_size,  train_seqs=['00', '01', '02', '04', '06', '08', '09']):
+    def __init__(self, root, batch_size,  train_seqs=['00', '01', '02', '04', '06', '08', '09'], seq_len=11):
         self.root = Path(root)
-        self.sequence_lengths = self._find_sequence_lengths(train_seqs)
+        self.seq_len = seq_len # lstm seq length
+        self.img_seq_len = self._find_img_seq_len(train_seqs)
         self.batch_size = batch_size
         self.batches = self._create_batches()
     
 
-    def _find_sequence_lengths(self, train_seqs):
-        sequence_lengths = []
+    def _find_img_seq_len(self, train_seqs):
+        img_seq_len = []
         for seq in train_seqs:
             fpaths = sorted((self.root/'sequences/{}/image_2'.format(seq)).glob("*.png"))
-            sequence_lengths.append(len(fpaths))
-        return sequence_lengths
+            img_seq_len.append(len(fpaths))
+        return img_seq_len
         
     def _create_batches(self):
         batches = []
         batch = []
-        for seq_idx, seq_length in enumerate(self.sequence_lengths):
-            for _ in range(seq_length):
-                batch.append((seq_idx, len(batch)))  # (sequence index, element index within the batch)
+        curr_idx = 0
+        for seq_idx, img_length in enumerate(self.img_seq_len):
+            
+            # To find out how many samples there actually are in an image sequence, this formula calculates it directly
+            num_samples = img_length - self.seq_len
+            for _ in range(num_samples):
+                batch.append((seq_idx, curr_idx))  # (sequence index, element index of samples)
                 if len(batch) == self.batch_size:
                     batches.append(batch)
                     batch = []
+                curr_idx += 1
             if batch:
                 batches.append(batch)
                 batch = []
+            
         return batches
 
     def __iter__(self):

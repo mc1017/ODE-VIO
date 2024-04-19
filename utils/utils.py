@@ -8,13 +8,16 @@ def setup_experiment_directories(args):
     file_dir = experiment_dir.joinpath(args.experiment_name)
     file_dir.mkdir(exist_ok=True)
 
-    checkpoints_dir = file_dir.joinpath('checkpoints')
-    checkpoints_dir.mkdir(exist_ok=True)
+    checkpoints_dir = Path('/mnt/data0/marco/NeuralCDE-VIO')
+    checkpoints_dir = checkpoints_dir.joinpath(args.experiment_name,'checkpoints')
+    checkpoints_dir.mkdir(parents=True, exist_ok=True)
 
     log_dir = file_dir.joinpath('logs')
     log_dir.mkdir(exist_ok=True)
-
-    return checkpoints_dir, log_dir
+    
+    graph_dir = file_dir.joinpath('graphs') 
+    graph_dir.mkdir(exist_ok=True)
+    return checkpoints_dir, log_dir, graph_dir
 
 
 def setup_logger(args, log_dir):

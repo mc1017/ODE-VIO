@@ -9,7 +9,7 @@ import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
 import math
 from src.data.utils import *
-from tqdm import tqdm 
+from tqdm import tqdm
 
 class data_partition():
     def __init__(self, opt, folder):
@@ -107,15 +107,14 @@ class KITTI_tester():
             
         return self.errors
 
-    def generate_plots(self, save_dir, window_size):
+    def generate_plots(self, save_dir, ep):
         for i, seq in enumerate(self.args.val_seq):
-            plotPath_2D(seq, 
+            plotPath_2D(seq, ep, 
                         self.est[i]['pose_gt_global'], 
                         self.est[i]['pose_est_global'], 
                         save_dir, 
                         self.est[i]['decs'], 
-                        self.est[i]['speed'], 
-                        window_size)
+                        self.est[i]['speed'])
     
     def save_text(self, save_dir):
         for i, seq in enumerate(self.args.val_seq):
@@ -131,10 +130,13 @@ def kitti_eval(pose_est, dec_est, pose_gt):
     
     # Calculate the translational and rotational RMSE
     t_rmse, r_rmse = rmse_err_cal(pose_est, pose_gt)
-
+    # print("differences:", pose_est-pose_gt)
     # Transfer to 3x4 pose matrix
     pose_est_mat = path_accu(pose_est)
     pose_gt_mat = path_accu(pose_gt)
+    # print("pose_est_mat:", pose_est_mat)
+    # print("pose_gt_mat:", pose_gt_mat)
+    
 
     # Using KITTI metric
     err_list, t_rel, r_rel, speed = kitti_err_cal(pose_est_mat, pose_gt_mat)
@@ -176,7 +178,7 @@ def kitti_err_cal(pose_est_mat, pose_gt_mat):
     t_rel, r_rel = computeOverallErr(err)
     return err, t_rel, r_rel, np.asarray(speed)
 
-def plotPath_2D(seq, poses_gt_mat, poses_est_mat, plot_path_dir, decision, speed, window_size):
+def plotPath_2D(seq, ep, poses_gt_mat, poses_est_mat, plot_path_dir, decision, speed):
     
     # Apply smoothing to the decision
     # decision = np.insert(decision, 0, 1)
@@ -221,7 +223,8 @@ def plotPath_2D(seq, poses_gt_mat, poses_est_mat, plot_path_dir, decision, speed
 
     plt.title('2D path')
     png_title = "{}_path_2d".format(seq)
-    full_path = plot_path_dir / f"{png_title}.png"
+    full_path = plot_path_dir / f"{seq}/{png_title}_{ep}.png"
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
     plt.savefig(full_path, bbox_inches='tight', pad_inches=0.1)
     plt.close()
 

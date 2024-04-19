@@ -6,6 +6,7 @@ import numpy as np
 from torch.distributions.utils import broadcast_all, probs_to_logits, logits_to_probs, lazy_property, clamp_probs
 import torch.nn.functional as F
 from torchdiffeq import odeint
+import torchode as to
 
 
 def conv(batchNorm, in_planes, out_planes, kernel_size=3, stride=1, dropout=0):
@@ -190,31 +191,24 @@ class Pose_RNN(nn.Module):
         # pose.shape = [16, 1, 6]
         # hc[0].shape, hc[1].shape = (16, 2, 1024), (16, 2, 1024)
         return pose, hc
-    
-# The RNN cell for Neural ODE in ODE-RNN
-class RNNCell(nn.Module):
-    def __init__(self, opt):
-        super(RNNCell, self).__init__()
-        self.feature_size = opt.v_f_len + opt.i_f_len
-        self.rnn = nn.LSTM(
-            input_size=self.feature_size,
-            hidden_size=opt.rnn_hidden_size,
-            num_layers=2,
-            dropout=opt.rnn_dropout_between,
-            batch_first=True)
-    
-    def forward(self, fused_features):
-        hc = self.rnn(fused_features)
         
     
 # ODE Function for Neural ODE
 class ODEFunc(nn.Module):
-    def __init__(self, hidden_dim):
+    def __init__(self, feature_dim, hidden_dim):
         super(ODEFunc, self).__init__()
         self.net = nn.Sequential(
+            nn.Linear(feature_dim, hidden_dim),
+            nn.Softplus(),
             nn.Linear(hidden_dim, hidden_dim),
-            nn.Tanh(),
+            nn.Softplus(),
             nn.Linear(hidden_dim, hidden_dim),
+            nn.Softplus(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Softplus(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Softplus(),
+            nn.Linear(hidden_dim, feature_dim),
         )
 
     def forward(self, t, x):
@@ -234,7 +228,12 @@ class Pose_ODE(nn.Module):
         self.regressor = nn.Sequential(
             nn.Linear(self.f_len, 128),
             nn.LeakyReLU(0.1, inplace=True),
+            nn.Linear(128, 256),
+            nn.LeakyReLU(0.1, inplace=True),
+            nn.Linear(256, 128),
+            nn.LeakyReLU(0.1, inplace=True),
             nn.Linear(128, 6))
+        
 
     def forward(self, fv, fv_alter, fi, dec, ts, prev=None):
 
@@ -266,7 +265,7 @@ class Pose_ODE_RNN(nn.Module):
 
         # The main ODE network
         self.f_len = opt.v_f_len + opt.i_f_len
-        self.ode_func = ODEFunc(hidden_dim=self.f_len)
+        self.ode_func = ODEFunc(feature_dim=self.f_len, hidden_dim=opt.ode_hidden_dim)
         self.fuse = Fusion_module(opt)
         self.rnn_cell = nn.RNNCell(input_size=self.f_len, hidden_size=self.f_len)
 
@@ -275,30 +274,33 @@ class Pose_ODE_RNN(nn.Module):
             nn.Linear(self.f_len, 128),
             nn.LeakyReLU(0.1, inplace=True),
             nn.Linear(128, 6))
+        
+        term = to.ODETerm(self.ode_func)
+        step_method = to.Heun(term=term)
+        step_size_controller = to.IntegralController(atol=1e-6, rtol=1e-3, term=term)    
+        self.solver = torch.compile(to.AutoDiffAdjoint(step_method, step_size_controller))
 
-    def forward(self, fv, fv_alter, fi, dec, ts, prev=None):
+    def forward(self, fv, fv_alter, fi, dec, ts, prev=None, do_profile=False):
 
         # Fusion of v_in and fi
         v_in = fv
         fused_features = self.fuse(v_in, fi)
 
-        # Initial state for ODE solver, potentially replacing zeros with a more meaningful initial state
-        # fused_features.shpae = [16, 1, 768]
+        # fused_features.shpae = [batch_size, 1, 768], 768 = 512 (image) + 256 (IMU)
         batch_size, seq_len, _ = fused_features.shape
-    
+        
         integrated_states = prev if prev is not None else torch.zeros(batch_size, self.f_len).to(fused_features.device)
         
-        # Incorporated time, but using dopri5 result in NaNs. Use fixed step size
-        # fixed_adams https://github.com/rtqichen/torchdiffeq/issues/27
-        ode_solutions = [] 
-        for i in range(batch_size):
-            ode_solution = odeint(self.ode_func, integrated_states[i, :], ts[i, :].squeeze(0), method='fixed_adams')[-1]
-            ode_solutions.append(ode_solution)
-            
-        integrated_states = torch.stack(ode_solutions, dim=0)
+        if do_profile: torch.cuda.nvtx.range_push("odeint")
+
+        problem = to.InitialValueProblem(y0=integrated_states, t_eval=ts)
+        ode_solutions = self.solver.solve(problem)
+        integrated_states = ode_solutions.ys[:, 1, :].squeeze(1)
+        
+        if do_profile: torch.cuda.nvtx.range_pop()
+        
         # fused_features.shape = [16, 1, 768], integrated_states.shape = [16, 768]
         integrated_states = self.rnn_cell(fused_features.squeeze(1), integrated_states)
-        # integrated_states.shape = [16, 768]     
         pose = self.regressor(integrated_states)
         # pose.shape = [16, 6]
         return pose.unsqueeze(1), integrated_states
@@ -320,50 +322,16 @@ class DeepVIO(nn.Module):
         # Image Size 256x512, specified in args. 3 channels, 11 sequence length, batch size 16
         # img.shape = [16, 11, 3, 256, 512] imu.shape[16, 101, 6]
         fv, fi = self.Feature_net(img, imu)
-        
-        
         # fv.shape = [16, 10, 512] fi.shpae =[16, 10, 256]
-        batch_size = fv.shape[0]
         seq_len = fv.shape[1]
 
-        poses, decisions, logits= [], [], []
-        # hidden = torch.zeros(batch_size, self.opt.rnn_hidden_size).to(fv.device) if hc is None else hc[0].contiguous()[:, -1, :]
-        fv_alter = torch.zeros_like(fv) # zero padding in the paper, can be replaced by other 
+        poses = []
         for i in range(seq_len):
-            # if i == 0 and is_first:
-                # The first relative pose is estimated by both images and imu by default
-            # print(fv.shape, fi.shape, timestamps.shape)
-            
             # fv.shape = [16, 10, 512], fi.shape = [16, 10, 256], timestamps.shape = [16, 11]
             pose, hc = self.Pose_net(fv[:, i:i+1, :], None, fi[:, i:i+1, :], None, timestamps[:, i:i+2], prev=hc)
-            # else:
-            #     if selection == 'gumbel-softmax':
-            #         # Otherwise, sample the decision from the policy network
-            #         p_in = torch.cat((fi[:, i, :], hidden), -1)
-            #         logit, decision = self.Policy_net(p_in.detach(), temp)
-            #         decision = decision.unsqueeze(1)
-            #         logit = logit.unsqueeze(1)
-            #         pose, hc = self.Pose_net(fv[:, i:i+1, :], fv_alter[:, i:i+1, :], fi[:, i:i+1, :], decision, hc)
-            #         decisions.append(decision)
-            #         logits.append(logit)
-            #     elif selection == 'random':
-            #         decision = (torch.rand(fv.shape[0], 1, 2) < p).float()
-            #         decision[:,:,1] = 1-decision[:,:,0]
-            #         decision = decision.to(fv.device)
-            #         logit = 0.5*torch.ones((fv.shape[0], 1, 2)).to(fv.device)
-            #         pose, hc = self.Pose_net(fv[:, i:i+1, :], fv_alter[:, i:i+1, :], fi[:, i:i+1, :], decision, hc)
-            #         decisions.append(decision)
-            #         logits.append(logit)
             poses.append(pose)
-            # hidden = hc[0].contiguous()[:, -1, :]
-
         poses = torch.cat(poses, dim=1)
-        # decisions = torch.cat(decisions, dim=1)
-        # logits = torch.cat(logits, dim=1)
-        # probs = torch.nn.functional.softmax(logits, dim=-1)
-
-        # return poses, decisions, probs, hc
-        return poses, hc
+        return poses, hc.detach()
 
 def initialization(net):
     #Initilization
