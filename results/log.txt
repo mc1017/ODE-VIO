@@ -1,3 +1,6 @@
 Starting Point:
-1. Train on Sequence 4, approximate straight line after 40 epoch
-2. Train on Sequence 10, approximate trajectory after 80 epoch
+1. Train_seq [4], approximate straight line after 40 epoch
+2. Train_seq [10], approximate trajectory after 80 epoch
+3. Train_seq [4, 10]. Test_seq [4, 10], trash results. Does not generalise well. 
+4. Tran_Seq [1, 2, 4, 10], Test_seq [1, 2, 4, 10], increased regressor model capacity, 500 epochs
+5. Train_seq [4, 10], Test_seq [4 10], increased regressor model capacity, 100 epochs, tanh activation

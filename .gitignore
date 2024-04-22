@@ -7,3 +7,5 @@ venv/
 pretrained_models/
 
 # Training
+results/*
+!results/log.txt
