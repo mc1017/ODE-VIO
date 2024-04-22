@@ -9,3 +9,4 @@ matplotlib
 tqdm
 torchdiffeq
 torchode
+black
