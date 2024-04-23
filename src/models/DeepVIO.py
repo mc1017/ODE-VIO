@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn.init import kaiming_normal_
 from src.models.Encoder import Encoder
-from src.models.PoseODERNN import PoseODERNN
+from src.models.PoseODERNN import PoseODERNN, PoseODERNN_V2
 
 
 class DeepVIO(nn.Module):
@@ -20,8 +20,6 @@ class DeepVIO(nn.Module):
         timestamps,
         is_first=True,
         hc=None,
-        temp=5,
-        selection="gumbel-softmax",
         p=0.5,
     ):
         # Image Size 256x512, specified in args. 3 channels, 11 sequence length, batch size 16

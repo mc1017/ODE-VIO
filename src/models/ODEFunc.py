@@ -34,6 +34,6 @@ class ODEFunc(nn.Module):
             raise ValueError(f"Activation function {ode_activation_fn} not supported")
         print("ODE Activation Function:", activation)
         return activation
-    
+
     def forward(self, t, x):
         return self.net(x)

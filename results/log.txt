@@ -4,4 +4,25 @@ Starting Point:
 3. Train_seq [4, 10]. Test_seq [4, 10], trash results. Does not generalise well. 
 4. Tran_Seq [1, 2, 4, 10], Test_seq [1, 2, 4, 10], increased regressor model capacity, 13 epochs, does not fit well
 5. Train_seq [4, 10], Test_seq [4 10], increased regressor model capacity, 100 epochs, final tanh activation layer, intermediate tanh gives nan, changed to softplu. Rubbish training after 40 epochs.
-6. train_seq [1], test_seq [1]. 
+6. train_seq [1], test_seq [1]. same setup. Does not work well
+7. train_seq [1], test_seq [1], decrease warmup lr, increase fine tune lr. 
+
+Possible experimentations from here
+- GRU, LSTM
+- Neural CDE
+- Initialise hc + Repeat use of hc after each sequence
+- Train on a smaller sequence
+- Verify Network Construction by restructuring training script
+- Absolute Tolerance (atol),  Relative Tolerance (rtol) 
+https://uk.mathworks.com/help/matlab/math/troubleshoot-common-ode-problems.html
+- Evaluation time stamps length
+
+8. Repeat use of hc, train_seq [4], val_seq [4], 100 epoch does not give good rotation results
+9. Repeat use of hc, 400 epoch, does not seem good. use non-overlapping sequences
+
+* Pose error calculation uses relative pose, however pose regressor regress to absolute pose. Need to feed in the differential.
+
+10. Use hidden states differential with stacked regressor, Revert back to overlapping sequences
+11. Use hidden state differential by deducting hidden states, great improvement in training
+12. Reduced atol, rtol to 10^-9 and 10^-6
+13. Restore stepped lr and ep. 

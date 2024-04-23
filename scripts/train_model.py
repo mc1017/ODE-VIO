@@ -3,7 +3,13 @@ import torch
 import numpy as np
 import math
 from src.data.KITTI_dataset import KITTI, SequenceBoundarySampler
-from src.data.utils import ToTensor, Resize, RandomHorizontalFlip, RandomColorAug, Compose 
+from src.data.utils import (
+    ToTensor,
+    Resize,
+    RandomHorizontalFlip,
+    RandomColorAug,
+    Compose,
+)
 from src.data.KITTI_eval import KITTI_tester
 from src.models.DeepVIO import DeepVIO
 from utils.params import set_gpu_ids, load_pretrained_model, get_optimizer
@@ -34,14 +40,14 @@ parser.add_argument(
     "--train_seq",
     type=str,
     default=["04", "10"],
-    nargs='+',
+    nargs="+",
     help="sequences for training",
 )
 parser.add_argument(
     "--val_seq",
     type=str,
     default=["04", "10"],
-    nargs='+',
+    nargs="+",
     help="sequences for validation",
 )
 parser.add_argument("--seed", type=int, default=0, help="random seed")
@@ -64,10 +70,16 @@ parser.add_argument(
     "--ode_num_layers", type=int, default=3, help="number of layers for the ODE"
 )
 parser.add_argument(
-    "--ode_activation_fn", type=str, default="tanh", help="activation function [softplus, relu, leaky_relu, tanh]"
+    "--ode_activation_fn",
+    type=str,
+    default="tanh",
+    help="activation function [softplus, relu, leaky_relu, tanh]",
 )
 parser.add_argument(
-    "--ode_solver", type=str, default="dopri5", help="ODE solvers [dopri5, heun, euler, runge_kutta, tsit5]"
+    "--ode_solver",
+    type=str,
+    default="dopri5",
+    help="ODE solvers [dopri5, heun, euler, runge_kutta, tsit5]",
 )
 
 parser.add_argument(
@@ -110,18 +122,6 @@ parser.add_argument(
 parser.add_argument(
     "--lr_fine", type=float, default=1e-6, help="learning rate for finetuning stage"
 )
-parser.add_argument(
-    "--eta", type=float, default=0.05, help="exponential decay factor for temperature"
-)
-parser.add_argument(
-    "--temp_init", type=float, default=5, help="initial temperature for gumbel-softmax"
-)
-parser.add_argument(
-    "--Lambda",
-    type=float,
-    default=3e-5,
-    help="penalty factor for the visual encoder usage",
-)
 
 parser.add_argument(
     "--experiment_name", type=str, default="experiment", help="experiment name"
@@ -153,7 +153,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--print_frequency", type=int, default=20, help="print frequency for loss values"
+    "--print_frequency", type=int, default=10, help="print frequency for loss values"
 )
 parser.add_argument(
     "--weighted", default=False, action="store_true", help="whether to use weighted sum"
@@ -173,28 +173,20 @@ logger = setup_logger(args, log_dir)
 def update_status(ep, args, model):
     if ep < args.epochs_warmup:  # Warmup stage
         lr = args.lr_warmup
-        selection = "random"
-        temp = args.temp_init
     elif (
         ep >= args.epochs_warmup and ep < args.epochs_warmup + args.epochs_joint
     ):  # Joint training stage
         lr = args.lr_joint
-        selection = "gumbel-softmax"
-        temp = args.temp_init * math.exp(-args.eta * (ep - args.epochs_warmup))
     elif ep >= args.epochs_warmup + args.epochs_joint:  # Finetuning stage
         lr = args.lr_fine
-        selection = "gumbel-softmax"
-        temp = args.temp_init * math.exp(-args.eta * (ep - args.epochs_warmup))
-    return lr, selection, temp
+    return lr
 
 
-def train(
-    model, optimizer, train_loader, selection, temp, logger, ep, p=0.5, weighted=False
-):
+def train(model, optimizer, train_loader, logger, ep, p=0.5, weighted=False):
 
     mse_losses = []
-    penalties = [0]
     data_len = len(train_loader)
+    # hc = None
     for i, (imgs, imus, gts, rot, weight, timestamps, folder) in enumerate(
         train_loader
     ):
@@ -215,8 +207,6 @@ def train(
             timestamps,
             is_first=True,
             hc=None,
-            temp=temp,
-            selection=selection,
             p=p,
         )
         angle_loss = torch.nn.functional.mse_loss(poses[:, :, :3], gts[:, :, :3])
@@ -238,7 +228,7 @@ def train(
         mse_losses.append(pose_loss.item())
         # penalties.append(penalty.item())
 
-    return np.mean(mse_losses), np.mean(penalties)
+    return np.mean(mse_losses)
 
 
 def evaluate(model, tester, ep, best):
@@ -247,7 +237,7 @@ def evaluate(model, tester, ep, best):
     logger.info("Evaluating the model")
     with torch.no_grad():
         model.eval()
-        errors = tester.eval(model, selection="gumbel-softmax", num_gpu=1)
+        errors = tester.eval(model, num_gpu=1)
         tester.generate_plots(graph_dir, ep)
 
     t_rel = np.mean([errors[i]["t_rel"] for i in range(len(errors))])
@@ -336,22 +326,20 @@ def main():
         init_epoch, args.epochs_warmup + args.epochs_joint + args.epochs_fine
     ):
 
-        lr, selection, temp = update_status(ep, args, model)
+        lr = update_status(ep, args, model)
         optimizer.param_groups[0]["lr"] = lr
-        message = (
-            f"Epoch: {ep}, lr: {lr}, selection: {selection}, temperaure: {temp:.5f}"
-        )
+        message = f"Epoch: {ep}, lr: {lr}"
         print(message)
         logger.info(message)
 
         model.train()
-        avg_pose_loss, avg_penalty_loss = train(
-            model, optimizer, train_loader, selection, temp, logger, ep, p=0.5
-        )
+        avg_pose_loss = train(model, optimizer, train_loader, logger, ep, p=0.5)
 
         # Save the model after training
         torch.save(model.module.state_dict(), f"{checkpoints_dir}/{ep:003}.pth")
-        message = f"Epoch {ep} training finished, pose loss: {avg_pose_loss:.6f}, penalty_loss: {avg_penalty_loss:.6f}, model saved"
+        message = (
+            f"Epoch {ep} training finished, pose loss: {avg_pose_loss:.6f}, model saved"
+        )
         print(message)
         logger.info(message)
 

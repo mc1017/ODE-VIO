@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from src.models.ODEFunc import ODEFunc
-from src.models.FusionModule import FusionModule    
+from src.models.FusionModule import FusionModule
 from torchdiffeq import odeint
 
 
