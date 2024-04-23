@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torchdiffeq import odeint
 import torchode as to
 from src.models.ODEFunc import ODEFunc
 from src.models.FusionModule import FusionModule
@@ -12,7 +11,7 @@ class PoseODERNN(nn.Module):
 
         # The main ODE network
         self.f_len = opt.v_f_len + opt.i_f_len
-        self.ode_func = ODEFunc(feature_dim=self.f_len, hidden_dim=opt.ode_hidden_dim, num_hidden_layers=opt.ode_num_layers, actiavtion=opt.ode_activation_fn)
+        self.ode_func = ODEFunc(feature_dim=self.f_len, hidden_dim=opt.ode_hidden_dim, num_hidden_layers=opt.ode_num_layers, activation=opt.ode_activation_fn)
         self.fuse = FusionModule(feature_dim=self.f_len, fuse_method=opt.fuse_method)
         self.rnn_cell = nn.RNNCell(input_size=self.f_len, hidden_size=self.f_len)
 

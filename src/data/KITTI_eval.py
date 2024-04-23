@@ -1,15 +1,14 @@
 import os
 import glob
 import numpy as np
-import time
 import scipy.io as sio
 import torch
 from PIL import Image
 import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
-import math
-from src.data.utils import *
+
 from tqdm import tqdm
+from src.data.utils import read_pose_from_text, read_time_from_text, path_accu, rmse_err_cal, trajectoryDistances, rotationError, translationError, computeOverallErr, saveSequence, lastFrameFromSegmentLength
 
 
 class data_partition:
@@ -92,7 +91,7 @@ class KITTI_tester:
 
     def test_one_path(self, net, df, selection, num_gpu=1, p=0.5):
         hc = None
-        pose_list, decision_list, probs_list = [], [], []
+        pose_list = []
         for i, (image_seq, imu_seq, gt_seq, ts_seq) in tqdm(
             enumerate(df), total=len(df), smoothing=0.9
         ):

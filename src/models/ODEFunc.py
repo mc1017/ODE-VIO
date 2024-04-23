@@ -3,9 +3,9 @@ import torch.nn as nn
 
 # ODE Function for Neural ODE
 class ODEFunc(nn.Module):
-    def __init__(self, feature_dim, hidden_dim, num_hidden_layers=3, actiavtion="tanh"):
+    def __init__(self, feature_dim, hidden_dim, num_hidden_layers=3, activation="tanh"):
         super(ODEFunc, self).__init__()
-        activation_func = self._set_activation(actiavtion)
+        activation_func = self._set_activation(activation)
         layers = [nn.Linear(feature_dim, hidden_dim), activation_func]
         for _ in range(num_hidden_layers - 1):
             layers.append(nn.Linear(hidden_dim, hidden_dim))
@@ -27,12 +27,12 @@ class ODEFunc(nn.Module):
         elif ode_activation_fn == "relu":
             activation = nn.ReLU()
         elif ode_activation_fn == "leaky_relu":
-            activation == nn.LeakyReLU()
+            activation = nn.LeakyReLU()
         elif ode_activation_fn == "softplus":
-            activation == nn.Softplus()
+            activation = nn.Softplus()
         else:
             raise ValueError(f"Activation function {ode_activation_fn} not supported")
-        print("ODE Activation Function:", ode_activation_fn)
+        print("ODE Activation Function:", activation)
         return activation
     
     def forward(self, t, x):

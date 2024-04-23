@@ -1,11 +1,8 @@
 import sys
 
 sys.path.append("..")
-import os
 import numpy as np
 from PIL import Image
-import torch
-import math
 from torch.utils.data import Dataset, BatchSampler
 import scipy.io as sio
 from pathlib import Path
@@ -51,7 +48,6 @@ class KITTI(Dataset):
             imus = sio.loadmat(self.root / "imus/{}.mat".format(folder))[
                 "imu_data_interp"
             ]
-            print(imus)
             # Use glob method to find .png files
             fpaths = sorted(
                 (self.root / "sequences/{}/image_2".format(folder)).glob("*.png")
@@ -88,7 +84,7 @@ class KITTI(Dataset):
                 }
                 sequence_set.append(sample)
         self.samples = sequence_set
-        print("len_smaples", len(self.samples))
+        print("Samples number:", len(self.samples))
 
         # Generate weights based on the rotation of the training segments
         # Weights are calculated based on the histogram of rotations according to the method in https://github.com/YyzHarry/imbalanced-regression

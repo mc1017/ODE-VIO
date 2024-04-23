@@ -1,10 +1,9 @@
 import argparse
 import torch
 import numpy as np
-from pathlib import Path
 import math
 from src.data.KITTI_dataset import KITTI, SequenceBoundarySampler
-from src.data.utils import *
+from src.data.utils import ToTensor, Resize, RandomHorizontalFlip, RandomColorAug, Compose 
 from src.data.KITTI_eval import KITTI_tester
 from src.models.DeepVIO import DeepVIO
 from utils.params import set_gpu_ids, load_pretrained_model, get_optimizer
@@ -33,14 +32,16 @@ parser.add_argument(
 
 parser.add_argument(
     "--train_seq",
-    type=list,
+    type=str,
     default=["04", "10"],
+    nargs='+',
     help="sequences for training",
 )
 parser.add_argument(
     "--val_seq",
-    type=list,
+    type=str,
     default=["04", "10"],
+    nargs='+',
     help="sequences for validation",
 )
 parser.add_argument("--seed", type=int, default=0, help="random seed")
@@ -296,7 +297,7 @@ def main():
         pin_memory=True,
         batch_sampler=batch_sampler,
     )
-    print("Number of Batches: ", len(train_loader))
+    print("Number of Batches:", len(train_loader))
     # GPU selections
     gpu_id = set_gpu_ids(args)
 

@@ -21,3 +21,9 @@ Arguments can be parsed into training using the following format.
 ```
 python3 -m scripts.train_model --gpu_ids=1 --experiment_name=6 --ode_activation_fn=softplus --train_seq 04 10  --val_seq 04 10
 ```
+
+Black formatter and ruff linter are used
+```
+black .
+ruff
+```

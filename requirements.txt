@@ -10,3 +10,4 @@ tqdm
 torchdiffeq
 torchode
 black
+ruff

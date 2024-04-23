@@ -2,5 +2,6 @@ Starting Point:
 1. Train_seq [4], approximate straight line after 40 epoch
 2. Train_seq [10], approximate trajectory after 80 epoch
 3. Train_seq [4, 10]. Test_seq [4, 10], trash results. Does not generalise well. 
-4. Tran_Seq [1, 2, 4, 10], Test_seq [1, 2, 4, 10], increased regressor model capacity, 500 epochs
-5. Train_seq [4, 10], Test_seq [4 10], increased regressor model capacity, 100 epochs, tanh activation
+4. Tran_Seq [1, 2, 4, 10], Test_seq [1, 2, 4, 10], increased regressor model capacity, 13 epochs, does not fit well
+5. Train_seq [4, 10], Test_seq [4 10], increased regressor model capacity, 100 epochs, final tanh activation layer, intermediate tanh gives nan, changed to softplu. Rubbish training after 40 epochs.
+6. train_seq [1], test_seq [1]. 
