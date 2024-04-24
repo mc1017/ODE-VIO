@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn.init import kaiming_normal_
 from src.models.Encoder import Encoder
-from src.models.PoseODERNN import PoseODERNN, PoseODERNN_V2
+from src.models.PoseODERNN import PoseODERNN
 
 
 class DeepVIO(nn.Module):

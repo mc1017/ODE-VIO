@@ -83,14 +83,18 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--rnn_hidden_size", type=int, default=1024, help="size of the LSTM latent"
+    "--rnn_type", type=str, default="lstm", help="type of RNN [rnn, lstm, gru]"
+)
+parser.add_argument(
+    "--rnn_hidden_size", type=int, default=1024, help="size of the RNN latent"
 )
 parser.add_argument(
     "--rnn_dropout_out",
     type=float,
     default=0.2,
-    help="dropout for the LSTM output layer",
+    help="dropout for the RNN output layer",
 )
+
 parser.add_argument(
     "--rnn_dropout_between", type=float, default=0.2, help="dropout within LSTM"
 )
@@ -116,11 +120,11 @@ parser.add_argument(
 parser.add_argument(
     "--lr_joint",
     type=float,
-    default=5e-5,
+    default=1e-4,
     help="learning rate for joint training stage",
 )
 parser.add_argument(
-    "--lr_fine", type=float, default=1e-6, help="learning rate for finetuning stage"
+    "--lr_fine", type=float, default=5e-5, help="learning rate for finetuning stage"
 )
 
 parser.add_argument(

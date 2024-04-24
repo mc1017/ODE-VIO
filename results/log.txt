@@ -20,9 +20,20 @@ https://uk.mathworks.com/help/matlab/math/troubleshoot-common-ode-problems.html
 8. Repeat use of hc, train_seq [4], val_seq [4], 100 epoch does not give good rotation results
 9. Repeat use of hc, 400 epoch, does not seem good. use non-overlapping sequences
 
-* Pose error calculation uses relative pose, however pose regressor regress to absolute pose. Need to feed in the differential.
+* Pose error calculation uses relative pose, however pose regressor regress to absolute pose. Need to feed in the differential?
 
 10. Use hidden states differential with stacked regressor, Revert back to overlapping sequences
 11. Use hidden state differential by deducting hidden states, great improvement in training
 12. Reduced atol, rtol to 10^-9 and 10^-6
-13. Restore stepped lr and ep. 
+13. Restore stepped lr and ep. Actually produced worse results. Should fine tune lr
+14. train_seq [01 02 04], val_seq [01 02 04 10]
+15. train_seq [04 10], val_seq [04, 10]. 04 seems not bad, but 10 goes wrong direction. should try to train 10 alone
+16. train_seq [10], val_seq [10], does seems to resembles the path, but takes a long time. 
+
+* Multiple Configurations For RNN input
+1. output, new_hidden_states = self.rnn(fused_features.squeeze(1), new_hidden_states)
+2. regress on output / regress on new_hidden_states/ regress on new_hidden_states + old_hidden_states
+
+17. train_seq [10], val_seq [10], use rnn + stacked hidden states. Slow convergence, curly lines
+18. train_seq [10], val_seq [10], use rnn + deducted hidden states. Straight lines like in 11. 
+19. train_seq [10], val_seq [10], use gru + deducted hidden states. Converges even slower. Changed back to rnn
