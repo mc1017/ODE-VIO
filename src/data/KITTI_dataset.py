@@ -2,6 +2,7 @@ import sys
 
 sys.path.append("..")
 import numpy as np
+import random
 from PIL import Image
 from torch.utils.data import Dataset, BatchSampler
 import scipy.io as sio
@@ -173,12 +174,17 @@ class SequenceBoundarySampler(BatchSampler):
         batch_size,
         train_seqs=["00", "01", "02", "04", "06", "08", "09"],
         seq_len=11,
+        shuffle=True,
     ):
         self.root = Path(root)
         self.seq_len = seq_len  # lstm seq length
         self.img_seq_len = self._find_img_seq_len(train_seqs)
         self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.samples = self._create_samples()
         self.batches = self._create_batches()
+        
+        print(self.batches)
 
     def _find_img_seq_len(self, train_seqs):
         img_seq_len = []
@@ -189,29 +195,51 @@ class SequenceBoundarySampler(BatchSampler):
             img_seq_len.append(len(fpaths))
         return img_seq_len
 
-    def _create_batches(self):
-        batches = []
-        batch = []
-        curr_idx = 0
+    # def _create_batches(self):
+    #     batches = []
+    #     batch = []
+    #     curr_idx = 0
+    #     for seq_idx, img_length in enumerate(self.img_seq_len):
+
+    #         # To find out how many samples there actually are in an image sequence, this formula calculates it directly
+    #         num_samples = img_length - self.seq_len
+    #         for _ in range(num_samples):
+    #             batch.append(
+    #                 (seq_idx, curr_idx)
+    #             )  # (sequence index, element index of samples)
+    #             if len(batch) == self.batch_size:
+    #                 batches.append(batch)
+    #                 batch = []
+    #             curr_idx += 1
+    #         if batch:
+    #             batches.append(batch)
+    #             batch = []
+
+    #     return batches
+    
+    def _create_samples(self):
+        samples = []
         for seq_idx, img_length in enumerate(self.img_seq_len):
-
-            # To find out how many samples there actually are in an image sequence, this formula calculates it directly
             num_samples = img_length - self.seq_len
-            for _ in range(num_samples):
-                batch.append(
-                    (seq_idx, curr_idx)
-                )  # (sequence index, element index of samples)
-                if len(batch) == self.batch_size:
-                    batches.append(batch)
-                    batch = []
-                curr_idx += 1
-            if batch:
-                batches.append(batch)
-                batch = []
+            for i in range(num_samples):
+                samples.append((seq_idx, i))
+        return samples
 
+    def _create_batches(self):
+        if self.shuffle:
+            random.shuffle(self.samples)  # Shuffle all samples
+        
+        batches = []
+        for i in range(0, len(self.samples), self.batch_size):
+            batch = self.samples[i:i + self.batch_size]
+            batches.append(batch)
+        
         return batches
 
     def __iter__(self):
+        if self.shuffle:
+            random.shuffle(self.batches)
+            
         for batch in self.batches:
             yield [idx for _, idx in batch]
 

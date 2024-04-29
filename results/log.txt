@@ -37,3 +37,37 @@ https://uk.mathworks.com/help/matlab/math/troubleshoot-common-ode-problems.html
 17. train_seq [10], val_seq [10], use rnn + stacked hidden states. Slow convergence, curly lines
 18. train_seq [10], val_seq [10], use rnn + deducted hidden states. Straight lines like in 11. 
 19. train_seq [10], val_seq [10], use gru + deducted hidden states. Converges even slower. Changed back to rnn
+20. train_seq [4 10], val_seq [04 10], use rnn, 04 converges but sway, 10 froms a relatively similar shape but does not fit entirely
+
+* Switched to regressing absolute pose from the first frame, then deduct the absolute pose from the previous prediction. 
+21. train_seq [04], val_seq [04], use rnn, deduct predicted absoute pose from a frame before. 
+
+* Maybe also test capping explotion or diminishing hidden states?
+22. train_seq [10], val_seq [10], tried on path 10
+23. train_seq [4, 10], val_seq [04, 10], it trains but not that good. 
+24. train_seq [4, 10], val_seq [04, 10], tried a few epochs for gru cell instead of rnncell, asbolutely garbage
+
+* Forgot to initialise rnncell and grucell. Try again after ensuring correct initialisation. Can write in report about the different initialisation
+* Forgot to add reduction = sum for loss calculation. 
+25. train_seq [4, 10], val_seq [04, 10], added initialisation with gru, garbage training
+26. train_seq [4, 10], val_seq [04, 10], added initialisation with rnn, normal rnn training
+27. train_seq [01 02 04 05 10], val_seq [01 02 04 05 10], tried initialisation with rnn long training
+
+* Revert back to differential with deduction
+28. train_seq [01 02 04 05 10], val_seq [01 02 04 05 10], tried initialisation with rnn long training 
+
+* Added data shuffling, Maybe that improves generalisation? 
+29. train_seq [04 05 07 10], val_seq [04 05 07 10], data shuffling, tried initialisation with rnn long training SHUFFLING IS THE MAIN ISSUE!!! 
+
+Why shuffling is important?
+Prevent Overfitting: Without shuffling, the model might learn the order of the sequences rather than the underlying patterns. If the dataset contains sequences in a specific order (e.g., easy to hard, or by different driving conditions), the model could pick up on this sequence and overfit to that pattern. 
+Balance Dataset: If the data is not shuffled, and there are imbalances in the dataset (e.g., certain types of sequences are clustered together), the model might learn to perform well on the overrepresented type at the expense of others. Shuffling helps to ensure that each mini-batch is more representative of the overall distribution of the data.
+Stochastic Gradient Descent Efficiency: Models are often trained using stochastic gradient descent (SGD) or its variants. These algorithms assume that each mini-batch is an unbiased estimate of the overall gradient. 
+
+* Now try to regress absolute pose then find the relative difference from last frame as suggested by Dr Clark.
+30. train_seq [04 05 07 10], val_seq [04 05 07 10], does not work well, error does not converge. 
+
+31. train_seq [04 05 07 10], val_seq [04 05 07 10], test using gru instead of rnn
+
+
+

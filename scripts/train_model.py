@@ -103,6 +103,7 @@ parser.add_argument(
     "--weight_decay", type=float, default=5e-6, help="weight decay for the optimizer"
 )
 parser.add_argument("--batch_size", type=int, default=26, help="batch size")
+parser.add_argument("--shuffle", type=int, default=True, help="shuffle data samples or not")
 parser.add_argument("--seq_len", type=int, default=11, help="sequence length for LSTM")
 parser.add_argument("--workers", type=int, default=8, help="number of workers")
 parser.add_argument(
@@ -213,8 +214,17 @@ def train(model, optimizer, train_loader, logger, ep, p=0.5, weighted=False):
             hc=None,
             p=p,
         )
-        angle_loss = torch.nn.functional.mse_loss(poses[:, :, :3], gts[:, :, :3])
-        translation_loss = torch.nn.functional.mse_loss(poses[:, :, 3:], gts[:, :, 3:])
+        
+        # poses shape = torch.Size([32, 10, 6])
+        # Calculate relative pose change from one prediction befores
+        # zero_pose = torch.zeros_like(poses[:, :1, :])
+        # padded_poses = torch.cat((zero_pose, poses[:, :-1, :]), dim=1)
+        # relative_pose = poses - padded_poses
+        relative_pose = poses
+        
+        # Calculate angle and translation loss
+        angle_loss = torch.nn.functional.mse_loss(relative_pose[:, :, :3], gts[:, :, :3])
+        translation_loss = torch.nn.functional.mse_loss(relative_pose[:, :, 3:], gts[:, :, 3:])
 
         pose_loss = 100 * angle_loss + translation_loss
         # penalty = (decisions[:,:,0].float()).sum(-1).mean()
@@ -284,6 +294,7 @@ def main():
         batch_size=args.batch_size,
         train_seqs=args.train_seq,
         seq_len=args.seq_len,
+        shuffle=args.shuffle,
     )
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -340,9 +351,9 @@ def main():
         avg_pose_loss = train(model, optimizer, train_loader, logger, ep, p=0.5)
 
         # Save the model after training
-        torch.save(model.module.state_dict(), f"{checkpoints_dir}/{ep:003}.pth")
+        
         message = (
-            f"Epoch {ep} training finished, pose loss: {avg_pose_loss:.6f}, model saved"
+            f"Epoch {ep} training finished, pose loss: {avg_pose_loss:.6f}"
         )
         print(message)
         logger.info(message)
