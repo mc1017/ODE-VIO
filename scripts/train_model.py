@@ -96,10 +96,6 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--rnn_dropout_between", type=float, default=0.2, help="dropout within LSTM"
-)
-
-parser.add_argument(
     "--weight_decay", type=float, default=5e-6, help="weight decay for the optimizer"
 )
 parser.add_argument("--batch_size", type=int, default=26, help="batch size")
@@ -351,7 +347,8 @@ def main():
         avg_pose_loss = train(model, optimizer, train_loader, logger, ep, p=0.5)
 
         # Save the model after training
-        
+        if ep%5 == 0:
+            torch.save(model.module.state_dict(), f'{checkpoints_dir}/{ep:003}.pth')
         message = (
             f"Epoch {ep} training finished, pose loss: {avg_pose_loss:.6f}"
         )

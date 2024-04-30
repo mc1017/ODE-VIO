@@ -67,7 +67,16 @@ Stochastic Gradient Descent Efficiency: Models are often trained using stochasti
 * Now try to regress absolute pose then find the relative difference from last frame as suggested by Dr Clark.
 30. train_seq [04 05 07 10], val_seq [04 05 07 10], does not work well, error does not converge. 
 
-31. train_seq [04 05 07 10], val_seq [04 05 07 10], test using gru instead of rnn
+31. train_seq [04 05 07 10], val_seq [04 05 07 10], test using gru instead of rnn, gru fail to generalise and performed badly. 
+
+* Introduced Dropout layer and see if it makes training better.
+32. train_seq [04 05 07 10], val_seq [04 05 07 10], gru still performs badly
+33. train_seq [04 05 07 10], val_seq [04 05 07 10], rnn to see if drop out layer makes it better. Does not make it better. Seems to trains poorly
+34. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10]. Perform actual training.
+
+* Removed Dropout layer. Made it worse. Seems like overfitting did not happen, more like underfitting
+35. 
+36. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10]. Perform actual training rnn no dropout training well at first, but then suddenly collapsed into circles after 11 epochs. Maybe need to reshuffle data after every single epoch.
 
 
 

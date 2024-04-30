@@ -14,7 +14,6 @@ class PoseODERNN(nn.Module):
         self.rnn_hidden_size = opt.rnn_hidden_size
         self.fuse_method = opt.fuse_method
         self.rnn_drop_out = opt.rnn_dropout_out
-        self.rnn_dropout_between = opt.rnn_dropout_between
         self.rnn_type = opt.rnn_type
 
         self.ode_func = ODEFunc(
@@ -63,15 +62,6 @@ class PoseODERNN(nn.Module):
         rnn = None
         if rnn_type == "rnn":
             rnn = nn.RNNCell(input_size=self.f_len, hidden_size=self.f_len)
-        elif rnn_type == "lstm":
-            rnn = nn.LSTM(
-                input_size=self.f_len,
-                hidden_size=self.rnn_hidden_size,
-                num_layers=2,
-                dropout=self.rnn_dropout_between,
-                batch_first=True,
-                proj_size = self.f_len
-            )
         elif rnn_type == "gru":
             rnn = nn.GRUCell(
                 input_size=self.f_len, hidden_size=self.f_len
