@@ -3,17 +3,11 @@ import torch
 import numpy as np
 import math
 from src.data.KITTI_dataset import KITTI, SequenceBoundarySampler
-from src.data.utils import (
-    ToTensor,
-    Resize,
-    RandomHorizontalFlip,
-    RandomColorAug,
-    Compose,
-)
 from src.data.KITTI_eval import KITTI_tester
 from src.models.DeepVIO import DeepVIO
 from utils.params import set_gpu_ids, load_pretrained_model, get_optimizer
-from utils.utils import setup_experiment_directories, setup_logger
+from utils.utils import setup_experiment_directories, setup_training_logger, setup_debug_logger
+from scripts.transforms import get_transforms
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -99,7 +93,9 @@ parser.add_argument(
     "--weight_decay", type=float, default=5e-6, help="weight decay for the optimizer"
 )
 parser.add_argument("--batch_size", type=int, default=26, help="batch size")
-parser.add_argument("--shuffle", type=int, default=True, help="shuffle data samples or not")
+parser.add_argument(
+    "--shuffle", type=int, default=True, help="shuffle data samples or not"
+)
 parser.add_argument("--seq_len", type=int, default=11, help="sequence length for LSTM")
 parser.add_argument("--workers", type=int, default=8, help="number of workers")
 parser.add_argument(
@@ -161,14 +157,14 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-
 # Set the random seed
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 
 # Setup experiment directories and logger
-checkpoints_dir, log_dir, graph_dir = setup_experiment_directories(args)
-logger = setup_logger(args, log_dir)
+checkpoints_dir, log_dir, graph_dir, flownet_dir, img_dir = setup_experiment_directories(args)
+logger = setup_training_logger(args, log_dir)
+debug_logger = setup_debug_logger(args, log_dir)
 
 
 def update_status(ep, args, model):
@@ -210,17 +206,21 @@ def train(model, optimizer, train_loader, logger, ep, p=0.5, weighted=False):
             hc=None,
             p=p,
         )
-        
+
         # poses shape = torch.Size([32, 10, 6])
         # Calculate relative pose change from one prediction befores
         # zero_pose = torch.zeros_like(poses[:, :1, :])
         # padded_poses = torch.cat((zero_pose, poses[:, :-1, :]), dim=1)
         # relative_pose = poses - padded_poses
         relative_pose = poses
-        
+
         # Calculate angle and translation loss
-        angle_loss = torch.nn.functional.mse_loss(relative_pose[:, :, :3], gts[:, :, :3])
-        translation_loss = torch.nn.functional.mse_loss(relative_pose[:, :, 3:], gts[:, :, 3:])
+        angle_loss = torch.nn.functional.mse_loss(
+            relative_pose[:, :, :3], gts[:, :, :3]
+        )
+        translation_loss = torch.nn.functional.mse_loss(
+            relative_pose[:, :, 3:], gts[:, :, 3:]
+        )
 
         pose_loss = 100 * angle_loss + translation_loss
         # penalty = (decisions[:,:,0].float()).sum(-1).mean()
@@ -267,20 +267,16 @@ def evaluate(model, tester, ep, best):
 
 
 def main():
+    # Get the data transforms
+    transform_train = get_transforms(args)
 
     # Load the dataset
-    transform_train = [ToTensor(), Resize((args.img_h, args.img_w))]
-    if args.hflip:
-        transform_train += [RandomHorizontalFlip()]
-    if args.color:
-        transform_train += [RandomColorAug()]
-    transform_train = Compose(transform_train)
-
     train_dataset = KITTI(
         args.data_dir,
         sequence_length=args.seq_len,
         train_seqs=args.train_seq,
         transform=transform_train,
+        logger=debug_logger
     )
     logger.info("train_dataset: " + str(train_dataset))
 
@@ -347,11 +343,9 @@ def main():
         avg_pose_loss = train(model, optimizer, train_loader, logger, ep, p=0.5)
 
         # Save the model after training
-        if ep%5 == 0:
-            torch.save(model.module.state_dict(), f'{checkpoints_dir}/{ep:003}.pth')
-        message = (
-            f"Epoch {ep} training finished, pose loss: {avg_pose_loss:.6f}"
-        )
+        if ep % 2 == 0:
+            torch.save(model.module.state_dict(), f"{checkpoints_dir}/{ep:003}.pth")
+        message = f"Epoch {ep} training finished, pose loss: {avg_pose_loss:.6f}"
         print(message)
         logger.info(message)
 

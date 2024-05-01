@@ -5,9 +5,9 @@ from src.models.ODEFunc import ODEFunc
 from src.models.FusionModule import FusionModule
 
 
-class PoseODERNN(nn.Module):
+class PoseNeuralCDE(nn.Module):
     def __init__(self, opt):
-        super(PoseODERNN, self).__init__()
+        super(PoseNeuralCDE, self).__init__()
 
         # The main ODE network
         self.f_len = opt.v_f_len + opt.i_f_len
@@ -63,7 +63,9 @@ class PoseODERNN(nn.Module):
         if rnn_type == "rnn":
             rnn = nn.RNNCell(input_size=self.f_len, hidden_size=self.f_len)
         elif rnn_type == "gru":
-            rnn = nn.GRUCell(input_size=self.f_len, hidden_size=self.f_len)
+            rnn = nn.GRUCell(
+                input_size=self.f_len, hidden_size=self.f_len
+            )
         else:
             raise ValueError(f"RNN type {rnn_type} not supported")
         print("RNN Type:", rnn)
@@ -99,14 +101,14 @@ class PoseODERNN(nn.Module):
         # fused_features.shape = [16, 1, 768], new_hidden_states.shape = [16, 768]
 
         new_hidden_states = self.rnn(fused_features.squeeze(1), new_hidden_states)
-
+        
         # rnn output shape = [16, 1, 768], rnn_hidden_states shape = [2, batch_size, 768]
 
         # Dropout layer
         # new_hidden_states = self.rnn_drop_out(new_hidden_states)
 
         # Since we want to find relative pose changes, we pass in the difference between the new and initial hidden states (new_hidden_states - initial_hidden_states) or stack(new_hidden_states, initial_hidden_states)
-        pose = self.regressor(new_hidden_states - initial_hidden_states)
+        pose = self.regressor(new_hidden_states-initial_hidden_states)
 
         # pose.shape = [16, 6]
         return pose.unsqueeze(1), new_hidden_states

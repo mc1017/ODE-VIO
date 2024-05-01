@@ -3,6 +3,7 @@ import sys
 sys.path.append("..")
 import numpy as np
 import random
+import logging
 from PIL import Image
 from torch.utils.data import Dataset, BatchSampler
 import scipy.io as sio
@@ -13,7 +14,9 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.signal.windows import triang
 from scipy.ndimage import convolve1d
 
+
 IMU_FREQ = 10
+
 
 
 class KITTI(Dataset):
@@ -23,12 +26,14 @@ class KITTI(Dataset):
         sequence_length=11,
         train_seqs=["00", "01", "02", "04", "06", "08", "09"],
         transform=None,
+        logger=None
     ):
 
         self.root = Path(root)
         self.sequence_length = sequence_length  # This is sequence length for LSTM
         self.transform = transform
         self.train_seqs = train_seqs
+        self.logger = logger
         self.make_dataset()
 
     def make_dataset(self):
@@ -84,8 +89,23 @@ class KITTI(Dataset):
                     "folder": folder,
                 }
                 sequence_set.append(sample)
+        
         self.samples = sequence_set
         print("Samples number:", len(self.samples))
+        # Print image statistics
+        for i in range(len(self.samples)):
+            img = np.asarray(Image.open(self.samples[i]["imgs"][0]))
+            if np.isnan(img).any():
+                self.logger.warning(f"NaN values found in image {i+1}, {self.samples[i]['imgs'][0]}")
+            if np.isinf(img).any():
+                self.logger.warning(f"Inf values found in image {i+1}, {self.samples[i]['imgs'][0]}.")
+
+            self.logger.debug(f"Shape: {img.shape}, Data type: {img.dtype}")
+            self.logger.debug(f"Min pixel value: {img.min()}, Max pixel value: {img.max()}")
+            self.logger.debug(f"Mean pixel value: {img.mean():.2f}, Std of pixel values: {img.std():.2f}")
+
+            if img.min() < 0 or img.max() > 255:
+                self.logger.warning(f"Image {i+1} in {self.samples[i]['imgs'][0]} has pixel values out of expected range [0, 255].")
 
         # Generate weights based on the rotation of the training segments
         # Weights are calculated based on the histogram of rotations according to the method in https://github.com/YyzHarry/imbalanced-regression
@@ -116,7 +136,7 @@ class KITTI(Dataset):
         gts = np.copy(sample["gts"]).astype(np.float32)
         timestamps = np.copy(sample["timestamps"]).astype(np.float32)
         folder = sample["folder"]
-
+        
         if self.transform is not None:
             imgs, imus, gts, timestamps = self.transform(imgs, imus, gts, timestamps)
         assert np.all(
@@ -183,8 +203,6 @@ class SequenceBoundarySampler(BatchSampler):
         self.shuffle = shuffle
         self.samples = self._create_samples()
         self.batches = self._create_batches()
-        
-        print(self.batches)
 
     def _find_img_seq_len(self, train_seqs):
         img_seq_len = []
@@ -195,28 +213,6 @@ class SequenceBoundarySampler(BatchSampler):
             img_seq_len.append(len(fpaths))
         return img_seq_len
 
-    # def _create_batches(self):
-    #     batches = []
-    #     batch = []
-    #     curr_idx = 0
-    #     for seq_idx, img_length in enumerate(self.img_seq_len):
-
-    #         # To find out how many samples there actually are in an image sequence, this formula calculates it directly
-    #         num_samples = img_length - self.seq_len
-    #         for _ in range(num_samples):
-    #             batch.append(
-    #                 (seq_idx, curr_idx)
-    #             )  # (sequence index, element index of samples)
-    #             if len(batch) == self.batch_size:
-    #                 batches.append(batch)
-    #                 batch = []
-    #             curr_idx += 1
-    #         if batch:
-    #             batches.append(batch)
-    #             batch = []
-
-    #     return batches
-    
     def _create_samples(self):
         samples = []
         for seq_idx, img_length in enumerate(self.img_seq_len):
@@ -228,18 +224,18 @@ class SequenceBoundarySampler(BatchSampler):
     def _create_batches(self):
         if self.shuffle:
             random.shuffle(self.samples)  # Shuffle all samples
-        
+            print("Shuffling Batches...")
+
         batches = []
         for i in range(0, len(self.samples), self.batch_size):
-            batch = self.samples[i:i + self.batch_size]
+            batch = self.samples[i : i + self.batch_size]
             batches.append(batch)
-        
+
         return batches
 
     def __iter__(self):
-        if self.shuffle:
-            random.shuffle(self.batches)
-            
+        self.batches = self._create_batches()
+
         for batch in self.batches:
             yield [idx for _, idx in batch]
 

@@ -71,19 +71,19 @@ def initialization(net):
                     param.data[start:end].fill_(1.0)
         elif isinstance(m, nn.GRUCell):
             # Xavier uniform initialization is designed to maintain a balanced variance of activations and gradients throughout the network, across different layers during the initial stages of training.
-            # Orthogonal initialization ensures that the weight matrices have orthogonal rows (or columns, depending on the dimensionality), which can be beneficial for RNNs including GRUs. 
+            # Orthogonal initialization ensures that the weight matrices have orthogonal rows (or columns, depending on the dimensionality), which can be beneficial for RNNs including GRUs.
             for name, param in m.named_parameters():
-                if 'weight_ih' in name:
+                if "weight_ih" in name:
                     torch.nn.init.xavier_uniform_(param.data)
-                elif 'weight_hh' in name:
+                elif "weight_hh" in name:
                     torch.nn.init.orthogonal_(param.data)
-                elif 'bias' in name:
+                elif "bias" in name:
                     param.data.fill_(0)
         elif isinstance(m, nn.RNNCell):
             for name, param in m.named_parameters():
-                if 'weight_ih' in name or 'weight_hh' in name:
+                if "weight_ih" in name or "weight_hh" in name:
                     torch.nn.init.xavier_uniform_(param.data)
-                elif 'bias' in name:
+                elif "bias" in name:
                     param.data.fill_(0)
         elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
             m.weight.data.fill_(1)

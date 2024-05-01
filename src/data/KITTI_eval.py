@@ -111,7 +111,7 @@ class KITTI_tester:
             t_in = ts_seq.unsqueeze(0).cuda().float()
             with torch.no_grad():
                 pose, hc = net(x_in, i_in, t_in, is_first=(i == 0), hc=hc, p=p)
-            
+
             # zero_pose = torch.zeros_like(pose[:, :1, :])
             # padded_poses = torch.cat((zero_pose, pose[:, :-1, :]), dim=1)
             # relative_pose = pose - padded_poses
@@ -119,7 +119,7 @@ class KITTI_tester:
             pose_list.append(relative_pose[0, :, :].detach().cpu().numpy())
             # decision_list.append(decision[0,:,:].detach().cpu().numpy()[:, 0])
             # probs_list.append(probs[0,:,:].detach().cpu().numpy())
-            
+
         pose_est = np.vstack(pose_list)
         # dec_est = np.hstack(decision_list)
         # prob_est = np.vstack(probs_list)

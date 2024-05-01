@@ -11,3 +11,4 @@ torchdiffeq
 torchode
 black
 ruff
+torchcde
