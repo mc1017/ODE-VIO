@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torch.autograd import Variable
+# from src.utils.plots import plot_flow_and_images
 
 
 def conv(batchNorm, in_planes, out_planes, kernel_size=3, stride=1, dropout=0):
@@ -91,17 +92,22 @@ class Encoder(nn.Module):
     def forward(self, img, imu):
 
         # img.shape = [16, 11, 3, 256, 512]
+        image_pair = img[:, 0:2, :, :, :]
         v = torch.cat((img[:, :-1], img[:, 1:]), dim=2)
         # v.shape = [16, 10, 6, 256, 512]
 
         batch_size = v.size(0)
         seq_len = v.size(1)
-
+        
         # image CNN
         v = v.view(batch_size * seq_len, v.size(2), v.size(3), v.size(4))
         v = self.encode_image(v)
         v = v.view(batch_size, seq_len, -1)  # (batch, seq_len, fv)
         v = self.visual_head(v)  # (batch, seq_len, 256)
+        optical_flow = v[:, :1, :]
+        # plot_flow_and_images(image_pair, optical_flow, opt.experiment_name)
+        
+        
 
         # IMU CNN
         # imu.shape = [16, 101, 6]

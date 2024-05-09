@@ -2,159 +2,62 @@ import argparse
 import torch
 import numpy as np
 import math
+import wandb
 from src.data.KITTI_dataset import KITTI, SequenceBoundarySampler
 from src.data.KITTI_eval import KITTI_tester
 from src.models.DeepVIO import DeepVIO
 from utils.params import set_gpu_ids, load_pretrained_model, get_optimizer
-from utils.utils import setup_experiment_directories, setup_training_logger, setup_debug_logger
+from utils.utils import setup_experiment_directories, setup_training_logger, setup_debug_logger, print_tensor_stats
 from scripts.transforms import get_transforms
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument(
-    "--data_dir",
-    type=str,
-    default="/mnt/data0/marco/KITTI/data",
-    help="path to the dataset",
-)
-parser.add_argument(
-    "--gpu_ids",
-    type=str,
-    default="0",
-    help="gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU",
-)
-parser.add_argument(
-    "--save_dir", type=str, default="./results", help="path to save the result"
-)
-parser.add_argument(
-    "--plot_dir", type=str, default="./results", help="path to save the log"
-)
+parser.add_argument( "--data_dir", type=str, default="/mnt/data0/marco/KITTI/data", help="path to the dataset",)
+parser.add_argument( "--gpu_ids", type=str, default="0", help="gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU",)
+parser.add_argument( "--save_dir", type=str, default="./results", help="path to save the result")
+parser.add_argument( "--plot_dir", type=str, default="./results", help="path to save the log")
 
-parser.add_argument(
-    "--train_seq",
-    type=str,
-    default=["04", "10"],
-    nargs="+",
-    help="sequences for training",
-)
-parser.add_argument(
-    "--val_seq",
-    type=str,
-    default=["04", "10"],
-    nargs="+",
-    help="sequences for validation",
-)
+parser.add_argument( "--train_seq", type=str, default=["04", "10"], nargs="+", help="sequences for training",)
+parser.add_argument( "--val_seq", type=str, default=["04", "10"], nargs="+", help="sequences for validation",)
 parser.add_argument("--seed", type=int, default=0, help="random seed")
 
 parser.add_argument("--img_w", type=int, default=512, help="image width")
 parser.add_argument("--img_h", type=int, default=256, help="image height")
 parser.add_argument("--v_f_len", type=int, default=512, help="visual feature length")
 parser.add_argument("--i_f_len", type=int, default=256, help="imu feature length")
-parser.add_argument(
-    "--fuse_method", type=str, default="cat", help="fusion method [cat, soft, hard]"
-)
-parser.add_argument(
-    "--imu_dropout", type=float, default=0, help="dropout for the IMU encoder"
-)
+parser.add_argument( "--fuse_method", type=str, default="cat", help="fusion method [cat, soft, hard]")
+parser.add_argument( "--imu_dropout", type=float, default=0, help="dropout for the IMU encoder")
+parser.add_argument( "--ode_hidden_dim", type=int, default=512, help="size of the ODE latent")
+parser.add_argument( "--ode_num_layers", type=int, default=3, help="number of layers for the ODE")
+parser.add_argument( "--ode_activation_fn", type=str, default="tanh", help="activation function [softplus, relu, leaky_relu, tanh]",)
+parser.add_argument( "--ode_solver", type=str, default="dopri5", help="ODE solvers [dopri5, heun, euler, runge_kutta, tsit5]",)
 
-parser.add_argument(
-    "--ode_hidden_dim", type=int, default=512, help="size of the ODE latent"
-)
-parser.add_argument(
-    "--ode_num_layers", type=int, default=3, help="number of layers for the ODE"
-)
-parser.add_argument(
-    "--ode_activation_fn",
-    type=str,
-    default="tanh",
-    help="activation function [softplus, relu, leaky_relu, tanh]",
-)
-parser.add_argument(
-    "--ode_solver",
-    type=str,
-    default="dopri5",
-    help="ODE solvers [dopri5, heun, euler, runge_kutta, tsit5]",
-)
+parser.add_argument( "--rnn_type", type=str, default="rnn", help="type of RNN [rnn, lstm, gru]") 
+parser.add_argument( "--rnn_hidden_size", type=int, default=1024, help="size of the RNN latent") 
+parser.add_argument( "--rnn_dropout_out", type=float, default=0, help="dropout for the RNN output layer",)
 
-parser.add_argument(
-    "--rnn_type", type=str, default="lstm", help="type of RNN [rnn, lstm, gru]"
-)
-parser.add_argument(
-    "--rnn_hidden_size", type=int, default=1024, help="size of the RNN latent"
-)
-parser.add_argument(
-    "--rnn_dropout_out",
-    type=float,
-    default=0.2,
-    help="dropout for the RNN output layer",
-)
-
-parser.add_argument(
-    "--weight_decay", type=float, default=5e-6, help="weight decay for the optimizer"
-)
+parser.add_argument( "--weight_decay", type=float, default=5e-6, help="weight decay for the optimizer")
 parser.add_argument("--batch_size", type=int, default=26, help="batch size")
-parser.add_argument(
-    "--shuffle", type=int, default=True, help="shuffle data samples or not"
-)
+parser.add_argument( "--shuffle", type=int, default=True, help="shuffle data samples or not")
 parser.add_argument("--seq_len", type=int, default=11, help="sequence length for LSTM")
 parser.add_argument("--workers", type=int, default=8, help="number of workers")
-parser.add_argument(
-    "--epochs_warmup", type=int, default=20, help="number of epochs for warmup"
-)
-parser.add_argument(
-    "--epochs_joint", type=int, default=40, help="number of epochs for joint training"
-)
-parser.add_argument(
-    "--epochs_fine", type=int, default=40, help="number of epochs for finetuning"
-)
-parser.add_argument(
-    "--lr_warmup", type=float, default=5e-4, help="learning rate for warming up stage"
-)
-parser.add_argument(
-    "--lr_joint",
-    type=float,
-    default=1e-4,
-    help="learning rate for joint training stage",
-)
-parser.add_argument(
-    "--lr_fine", type=float, default=5e-5, help="learning rate for finetuning stage"
-)
+parser.add_argument( "--epochs_warmup", type=int, default=20, help="number of epochs for warmup")
+parser.add_argument( "--epochs_joint", type=int, default=40, help="number of epochs for joint training")
+parser.add_argument( "--epochs_fine", type=int, default=40, help="number of epochs for finetuning")
+parser.add_argument( "--lr_warmup", type=float, default=5e-4, help="learning rate for warming up stage")
+parser.add_argument( "--lr_joint", type=float, default=5e-5, help="learning rate for joint training stage",)
+parser.add_argument( "--lr_fine", type=float, default=1e-6, help="learning rate for finetuning stage")
+parser.add_argument( "--gradient_clip", type=float, default=5, help="gradient clipping norm/clip value")
 
-parser.add_argument(
-    "--experiment_name", type=str, default="experiment", help="experiment name"
-)
-parser.add_argument(
-    "--optimizer", type=str, default="Adam", help="type of optimizer [Adam, SGD]"
-)
+parser.add_argument( "--experiment_name", type=str, default="experiment", help="experiment name")
+parser.add_argument( "--optimizer", type=str, default="Adam", help="type of optimizer [Adam, SGD]")
+parser.add_argument( "--pretrain_flownet", type=str, default="./pretrained_models/flownets_bn_EPE2.459.pth.tar", help="wehther to use the pre-trained flownet",)
+parser.add_argument( "--pretrain", type=str, default=None, help="path to the pretrained model")
+parser.add_argument( "--hflip", default=False, action="store_true", help="whether to use horizonal flipping as augmentation",)
+parser.add_argument( "--color", default=False, action="store_true", help="whether to use color augmentations",)
 
-parser.add_argument(
-    "--pretrain_flownet",
-    type=str,
-    default="./pretrained_models/flownets_bn_EPE2.459.pth.tar",
-    help="wehther to use the pre-trained flownet",
-)
-parser.add_argument(
-    "--pretrain", type=str, default=None, help="path to the pretrained model"
-)
-parser.add_argument(
-    "--hflip",
-    default=False,
-    action="store_true",
-    help="whether to use horizonal flipping as augmentation",
-)
-parser.add_argument(
-    "--color",
-    default=False,
-    action="store_true",
-    help="whether to use color augmentations",
-)
-
-parser.add_argument(
-    "--print_frequency", type=int, default=10, help="print frequency for loss values"
-)
-parser.add_argument(
-    "--weighted", default=False, action="store_true", help="whether to use weighted sum"
-)
+parser.add_argument( "--print_frequency", type=int, default=10, help="print frequency for loss values")
+parser.add_argument( "--weighted", default=False, action="store_true", help="whether to use weighted sum")
 args = parser.parse_args()
 
 # Set the random seed
@@ -194,7 +97,6 @@ def train(model, optimizer, train_loader, logger, ep, p=0.5, weighted=False):
         gts = gts.cuda().float()
         weight = weight.cuda().float()
         timestamps = timestamps.cuda().float()
-
         optimizer.zero_grad()
 
         # imgs.shape, imus.shape, timestamps.shape = torch.Size([32, 11, 3, 256, 512]) torch.Size([32, 101, 6]) torch.Size([32, 11])
@@ -227,13 +129,17 @@ def train(model, optimizer, train_loader, logger, ep, p=0.5, weighted=False):
         # loss = pose_loss + args.Lambda * penalty
         loss = pose_loss
         loss.backward()
+        
+        if args.gradient_clip:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=args.gradient_clip)
+            
         optimizer.step()
 
         if i % args.print_frequency == 0:
-            # message = f'Epoch: {ep}, iters: {i}/{data_len}, pose loss: {pose_loss.item():.6f}, penalty: {penalty.item():.6f}, loss: {loss.item():.6f}'
             message = f"Epoch: {ep}, iters: {i}/{data_len}, pose loss: {pose_loss.item():.6f}, angle_loss: {angle_loss.item():.6f}, translation_loss: {translation_loss.item():.6f}, loss: {loss.item():.6f}"
             print(message)
             logger.info(message)
+            wandb.log({"loss": loss.item(), "angle_loss": angle_loss.item(), "translation_loss": translation_loss.item()})
 
         mse_losses.append(pose_loss.item())
         # penalties.append(penalty.item())
@@ -254,16 +160,15 @@ def evaluate(model, tester, ep, best):
     r_rel = np.mean([errors[i]["r_rel"] for i in range(len(errors))])
     t_rmse = np.mean([errors[i]["t_rmse"] for i in range(len(errors))])
     r_rmse = np.mean([errors[i]["r_rmse"] for i in range(len(errors))])
-    usage = np.mean([errors[i]["usage"] for i in range(len(errors))])
 
     if t_rel < best:
         best = t_rel
         torch.save(model.module.state_dict(), f"{checkpoints_dir}/best_{best:.2f}.pth")
 
-    message = f"Epoch {ep} evaluation finished , t_rel: {t_rel:.4f}, r_rel: {r_rel:.4f}, t_rmse: {t_rmse:.4f}, r_rmse: {r_rmse:.4f}, usage: {usage:.4f}, best t_rel: {best:.4f}"
+    message = f"Epoch {ep} evaluation finished , t_rel: {t_rel:.4f}, r_rel: {r_rel:.4f}, t_rmse: {t_rmse:.4f}, r_rmse: {r_rmse:.4f}, best t_rel: {best:.4f}"
     logger.info(message)
     print(message)
-    return best
+    return best, t_rel, r_rel, t_rmse, r_rmse
 
 
 def main():
@@ -349,8 +254,8 @@ def main():
         print(message)
         logger.info(message)
 
-        # if ep > args.epochs_warmup+args.epochs_joint:
-        best = evaluate(model, tester, ep, best)
+        best, t_rel, r_rel, t_rmse, r_rmse  = evaluate(model, tester, ep, best)
+        wandb.log({"t_rel": t_rel, "r_rel": r_rel, "t_rmse": t_rmse, "r_rmse": r_rmse, "best_t_rel": best})
 
     message = f"Training finished, best t_rel: {best:.4f}"
     logger.info(message)
@@ -358,4 +263,16 @@ def main():
 
 
 if __name__ == "__main__":
+    id = wandb.util.generate_id()
+    # id = "ttii5lx8"
+    logger.info(f"Wandb Run ID: {id}")
+    wandb.init(
+        # set the wandb project where this run will be logged
+        project="Final Year Project",
+        id=id, 
+        resume="must",
+        name=args.experiment_name,
+        # track hyperparameters and run metadata
+        config=args,
+    )
     main()

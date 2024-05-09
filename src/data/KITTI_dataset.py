@@ -92,20 +92,20 @@ class KITTI(Dataset):
         
         self.samples = sequence_set
         print("Samples number:", len(self.samples))
-        # Print image statistics
-        for i in range(len(self.samples)):
-            img = np.asarray(Image.open(self.samples[i]["imgs"][0]))
-            if np.isnan(img).any():
-                self.logger.warning(f"NaN values found in image {i+1}, {self.samples[i]['imgs'][0]}")
-            if np.isinf(img).any():
-                self.logger.warning(f"Inf values found in image {i+1}, {self.samples[i]['imgs'][0]}.")
+        # # Print image statistics
+        # for i in range(len(self.samples)):
+        #     img = np.asarray(Image.open(self.samples[i]["imgs"][0]))
+        #     if np.isnan(img).any():
+        #         self.logger.warning(f"NaN values found in image {i+1}, {self.samples[i]['imgs'][0]}")
+        #     if np.isinf(img).any():
+        #         self.logger.warning(f"Inf values found in image {i+1}, {self.samples[i]['imgs'][0]}.")
 
-            self.logger.debug(f"Shape: {img.shape}, Data type: {img.dtype}")
-            self.logger.debug(f"Min pixel value: {img.min()}, Max pixel value: {img.max()}")
-            self.logger.debug(f"Mean pixel value: {img.mean():.2f}, Std of pixel values: {img.std():.2f}")
+        #     self.logger.debug(f"Shape: {img.shape}, Data type: {img.dtype}")
+        #     self.logger.debug(f"Min pixel value: {img.min()}, Max pixel value: {img.max()}")
+        #     self.logger.debug(f"Mean pixel value: {img.mean():.2f}, Std of pixel values: {img.std():.2f}")
 
-            if img.min() < 0 or img.max() > 255:
-                self.logger.warning(f"Image {i+1} in {self.samples[i]['imgs'][0]} has pixel values out of expected range [0, 255].")
+        #     if img.min() < 0 or img.max() > 255:
+        #         self.logger.warning(f"Image {i+1} in {self.samples[i]['imgs'][0]} has pixel values out of expected range [0, 255].")
 
         # Generate weights based on the rotation of the training segments
         # Weights are calculated based on the histogram of rotations according to the method in https://github.com/YyzHarry/imbalanced-regression
@@ -146,7 +146,6 @@ class KITTI(Dataset):
 
         rot = sample["rot"].astype(np.float32)
         weight = self.weights[index]
-
         return imgs, imus, gts, rot, weight, timestamps, folder
 
     def __len__(self):
@@ -202,7 +201,7 @@ class SequenceBoundarySampler(BatchSampler):
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.samples = self._create_samples()
-        self.batches = self._create_batches()
+        self.batches = None
 
     def _find_img_seq_len(self, train_seqs):
         img_seq_len = []
@@ -230,7 +229,6 @@ class SequenceBoundarySampler(BatchSampler):
         for i in range(0, len(self.samples), self.batch_size):
             batch = self.samples[i : i + self.batch_size]
             batches.append(batch)
-
         return batches
 
     def __iter__(self):

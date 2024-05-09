@@ -5,6 +5,7 @@ from src.models.Encoder import Encoder
 from src.models.PoseODERNN import PoseODERNN
 
 
+
 class DeepVIO(nn.Module):
     def __init__(self, opt):
         super(DeepVIO, self).__init__()

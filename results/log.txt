@@ -78,11 +78,18 @@ Stochastic Gradient Descent Efficiency: Models are often trained using stochasti
 36. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10]. Perform actual training rnn no dropout training well at first, but then suddenly collapsed into circles after 11 epochs. Maybe need to reshuffle data after every single epoch.
 
 * Added reshuffling at the start of each epoch
-37. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10]. 
+37. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10]. Converges to circle at epoch 11, then loss comes back down and converge nicely. Best translation loss ~t_rel: 21.0623, r_rel: 4.2701
 38. tested loading saved model. It works.
 
 * Debugging Image Loading and Data sources
 39. 
 
+40. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10]. Implemented Gradient Clipping at value 5. Seems like gradient clipping is effective at lowering the loss spike, but spike still occurs.
+
+41. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10], gradient clip=1
+
+42. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10], changed learning rate from 5e-4, 1e-4, 5e-5 to 5e-4, 5e-5, 1e-6
+
+43. Tested run and continue experiments logging. 
 
 

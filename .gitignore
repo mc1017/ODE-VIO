@@ -9,3 +9,6 @@ pretrained_models/
 # Training
 results/*
 !results/log.txt
+
+# Wandb logging
+wandb/*

@@ -12,3 +12,4 @@ torchode
 black
 ruff
 torchcde
+wandb

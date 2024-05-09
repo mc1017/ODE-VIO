@@ -6,6 +6,7 @@ from PIL import Image
 import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from pathlib import Path
 from src.data.utils import (
     read_pose_from_text,
     path_accu,
@@ -332,3 +333,51 @@ def plotPath_2D(
         plot_path_dir + "/" + png_title + ".png", bbox_inches="tight", pad_inches=0.1
     )
     plt.close()
+    
+    
+def plot_flow_and_images(img_pair, flow, experiment_name, idx=0):
+    """
+    Saves a stacked image of a pair of images and the corresponding optical flow.
+    :param img_pair: Tensor of shape [batch_size, 2, channels, height, width]
+    :param flow: Tensor of shape [batch_size, 2, height, width] (flow map)
+    :param idx: Index of the batch element to visualize
+    """
+    save_path = Path("./results").joinpath(experiment_name, "flownets")
+    img1 = img_pair[idx, 0].permute(1, 2, 0).cpu().numpy()
+    img2 = img_pair[idx, 1].permute(1, 2, 0).cpu().numpy()
+    u = flow[idx, 0].cpu().numpy()
+    v = flow[idx, 1].cpu().numpy()
+
+    # Generate flow magnitude image and quiver plot on a new figure
+    height, width = u.shape
+    x, y = np.meshgrid(np.arange(width), np.arange(height))
+    mag = np.sqrt(u**2 + v**2)
+    plt.figure(figsize=(4, 12))
+    plt.imshow(mag, cmap='hot')
+    plt.quiver(x[::5, ::5], y[::5, ::5], u[::5, ::5], v[::5, ::5], color='cyan')
+    plt.axis('off')
+
+    # Capture the plot as an image
+    plt.gca().set_position([0, 0, 1, 1])
+    plt.gca().set_aspect('auto')
+    plt.savefig('flow.png', bbox_inches='tight', pad_inches=0)
+    plt.close()
+
+    flow_img = Image.open('flow.png')
+
+    # Convert numpy arrays to PIL images
+    img1_pil = Image.fromarray((img1 * 255).astype(np.uint8))
+    img2_pil = Image.fromarray((img2 * 255).astype(np.uint8))
+    
+    # Resize for uniformity if necessary
+    flow_img = flow_img.resize(img1_pil.size, Image.LANCZOS)
+
+    # Combine images vertically
+    combined_img = Image.new('RGB', (img1_pil.width, img1_pil.height * 3))
+    combined_img.paste(img1_pil, (0, 0))
+    combined_img.paste(img2_pil, (0, img1_pil.height))
+    combined_img.paste(flow_img, (0, img1_pil.height * 2))
+
+    # Save the combined image
+    combined_img.save(save_path)
+

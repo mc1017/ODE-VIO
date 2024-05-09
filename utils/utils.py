@@ -1,5 +1,6 @@
 from pathlib import Path
 import logging
+import torch
 
 
 def setup_experiment_directories(args):
@@ -64,3 +65,18 @@ def setup_debug_logger(args, log_dir):
         logger.addHandler(file_handler)
     
     return logger
+
+
+def print_tensor_stats(tensor, name, logger):
+    """Print statistics for a given tensor."""
+    """Log statistics for a given tensor."""
+    logger.debug(f"Statistics for {name}:")
+    logger.debug(f"  Device: {tensor.device}")
+    logger.debug(f"  Data type: {tensor.dtype}")
+    logger.debug(f"  Shape: {tensor.shape}")
+    logger.debug(f"  Min value: {torch.min(tensor).item()}")
+    logger.debug(f"  Max value: {torch.max(tensor).item()}")
+    logger.debug(f"  Mean value: {torch.mean(tensor.float()).item()}")
+    logger.debug(f"  Std deviation: {torch.std(tensor.float()).item()}")
+    logger.debug(f"  Contains NaN: {torch.isnan(tensor).any().item()}")
+    logger.debug(f"  Contains Inf: {torch.isinf(tensor).any().item()}")
