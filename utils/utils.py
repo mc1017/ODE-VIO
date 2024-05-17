@@ -1,6 +1,7 @@
 from pathlib import Path
 import logging
 import torch
+import sys
 
 
 def setup_experiment_directories(args):
@@ -38,9 +39,13 @@ def setup_training_logger(args, log_dir):
     file_handler = logging.FileHandler(
         str(log_dir) + f"/train_{args.experiment_name}.txt"
     )
+     # Handler for printing to console
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
     logger.info(
         "----------------------------------------TRAINING----------------------------------"
     )

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn.init import kaiming_normal_
-from src.models.Encoder import Encoder
+from src.models.Encoder import ImageEncoder, InertialEncoder
 from src.models.PoseODERNN import PoseODERNN
 
 
@@ -9,7 +9,8 @@ from src.models.PoseODERNN import PoseODERNN
 class DeepVIO(nn.Module):
     def __init__(self, opt):
         super(DeepVIO, self).__init__()
-        self.Feature_net = Encoder(opt)
+        self.Image_net = ImageEncoder(opt)
+        self.Inertial_net = InertialEncoder(opt)
         self.Pose_net = PoseODERNN(opt)
         self.opt = opt
         initialization(self)
@@ -21,11 +22,10 @@ class DeepVIO(nn.Module):
         timestamps,
         is_first=True,
         hc=None,
-        p=0.5,
     ):
         # Image Size 256x512, specified in args. 3 channels, 11 sequence length, batch size 16
         # img.shape = [16, 11, 3, 256, 512] imu.shape[16, 101, 6]
-        fv, fi = self.Feature_net(img, imu)
+        fv, fi = self.Image_net(img), self.Inertial_net(imu)
         # fv.shape = [16, 10, 512] fi.shpae =[16, 10, 256]
         seq_len = fv.shape[1]
 

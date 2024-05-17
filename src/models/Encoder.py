@@ -36,10 +36,10 @@ def conv(batchNorm, in_planes, out_planes, kernel_size=3, stride=1, dropout=0):
 
 
 # The inertial encoder for raw imu data
-class Inertial_encoder(nn.Module):
+class InertialEncoder(nn.Module):
     def __init__(self, opt):
-        super(Inertial_encoder, self).__init__()
-
+        super(InertialEncoder, self).__init__()
+        self.num_pairs = opt.seq_len - 1 # concatentating pairs of images together. eg. we get 10 pairs from 11 images 
         self.encoder_conv = nn.Sequential(
             nn.Conv1d(6, 64, kernel_size=3, padding=1),
             nn.BatchNorm1d(64),
@@ -57,9 +57,13 @@ class Inertial_encoder(nn.Module):
         self.proj = nn.Linear(256 * 1 * 11, opt.i_f_len)
 
     def forward(self, x):
-        # x: (N, seq_len, 11, 6)
+        x = torch.cat(
+            [x[:, i * 10 : i * 10 + 11, :].unsqueeze(1) for i in range(self.num_pairs)],
+            dim=1,
+        )
         batch_size = x.shape[0]
         seq_len = x.shape[1]
+        # x: (N, seq_len, 11, 6)
         x = x.view(
             batch_size * seq_len, x.size(2), x.size(3)
         )  # x: (N x seq_len, 11, 6)
@@ -68,9 +72,9 @@ class Inertial_encoder(nn.Module):
         return out.view(batch_size, seq_len, 256)
 
 
-class Encoder(nn.Module):
+class ImageEncoder(nn.Module):
     def __init__(self, opt):
-        super(Encoder, self).__init__()
+        super(ImageEncoder, self).__init__()
         # CNN
         self.opt = opt
         self.conv1 = conv(True, 6, 64, kernel_size=7, stride=2, dropout=0.2)
@@ -87,9 +91,8 @@ class Encoder(nn.Module):
         __tmp = self.encode_image(__tmp)
 
         self.visual_head = nn.Linear(int(np.prod(__tmp.size())), opt.v_f_len)
-        self.inertial_encoder = Inertial_encoder(opt)
 
-    def forward(self, img, imu):
+    def forward(self, img):
 
         # img.shape = [16, 11, 3, 256, 512]
         image_pair = img[:, 0:2, :, :, :]
@@ -106,18 +109,7 @@ class Encoder(nn.Module):
         v = self.visual_head(v)  # (batch, seq_len, 256)
         optical_flow = v[:, :1, :]
         # plot_flow_and_images(image_pair, optical_flow, opt.experiment_name)
-        
-        
-
-        # IMU CNN
-        # imu.shape = [16, 101, 6]
-        imu = torch.cat(
-            [imu[:, i * 10 : i * 10 + 11, :].unsqueeze(1) for i in range(seq_len)],
-            dim=1,
-        )
-        # imu.shape = [16, 10, 11, 6]
-        imu = self.inertial_encoder(imu)
-        return v, imu
+        return v
 
     def encode_image(self, x):
         out_conv2 = self.conv2(self.conv1(x))

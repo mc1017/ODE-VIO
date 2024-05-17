@@ -110,7 +110,7 @@ class KITTI_tester:
             i_in = imu_seq.unsqueeze(0).cuda().float()
             t_in = ts_seq.unsqueeze(0).cuda().float()
             with torch.no_grad():
-                pose, hc = net(x_in, i_in, t_in, is_first=(i == 0), hc=hc, p=p)
+                pose, hc = net(x_in, i_in, t_in, is_first=(i == 0), hc=hc)
 
             # zero_pose = torch.zeros_like(pose[:, :1, :])
             # padded_poses = torch.cat((zero_pose, pose[:, :-1, :]), dim=1)

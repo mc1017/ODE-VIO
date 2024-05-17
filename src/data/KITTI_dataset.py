@@ -201,7 +201,7 @@ class SequenceBoundarySampler(BatchSampler):
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.samples = self._create_samples()
-        self.batches = None
+        self.batches = self._create_batches() 
 
     def _find_img_seq_len(self, train_seqs):
         img_seq_len = []

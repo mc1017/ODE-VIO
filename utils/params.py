@@ -33,7 +33,7 @@ def get_optimizer(model, args):
     elif args.optimizer == "Adam":
         optimizer = torch.optim.Adam(
             model.parameters(),
-            lr=1e-4,
+            lr=args.lr_warmup,
             betas=(0.9, 0.999),
             eps=1e-08,
             weight_decay=args.weight_decay,
