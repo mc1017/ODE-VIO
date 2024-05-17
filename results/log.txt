@@ -93,3 +93,18 @@ Stochastic Gradient Descent Efficiency: Models are often trained using stochasti
 43. Tested run and continue experiments logging. 
 
 
+
+
+
+50. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10], run with gru to see if its better. 
+51. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10], run with SGD optimiser with GRU
+GRU still rubbish 
+52. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10], run with SGD optimiser with rnn
+53. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10], run with SGD optimiser with rnn, old lr [5e-4, 5e-5 1e-6] new lr [1e-4, 1e-5, 1e-6]
+Both does not work well. SGD Optimiser is not as good as Adam. Revert back to Adam
+
+Try new architecture levels. Maybe increase ODE Hidden?
+54. Increased ode_hidden to 1024, lr [1e-3, 1e-4, 1e-5]
+55. same config as above, ode_hidden=1024
+57.  lower ode_hidden_layers to 2, ode_hidden = 512
+
