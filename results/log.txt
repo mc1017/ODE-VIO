@@ -103,7 +103,20 @@ Things to test from here:
 5. Learning Rate decay/ lower learning rate
 6. Linear Probing
 
-46. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10] restore restore lr [1e-4, 1e-5, 1e-6] Froze Encoder
+46. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10] restore restore lr [1e-4, 1e-5, 1e-6] Froze Encoder train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10] restore restore lr [1e-4, 1e-5, 1e-6] Unfroze Encoder at 50 epochs. Seems like the finetuning of encoder is not the bottleneck. 
+
+Suspecting bottleneck might be in the NeuralODE network. Try increase the number of layers and keep frozen encoder
+
+Also changed loggin formats
+47. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] increase ode_layers to 5. non frozen encoder. Does not outperform 3 layers.
+
+Added data dropout functionality
+48. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] increase ode_layers to 5. non frozen encoder same config but data_dropout 0.1, eval_data_dropout 0.1
+
+Maybe try using soft/hard fusion would work better. 
+49. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] ode_layers 5. frozen encoder for space, soft cat
+50. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] ode_layers 5. frozen encoder for space, soft cat
+
 
 
 50. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10], run with gru to see if its better. 

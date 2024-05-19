@@ -8,7 +8,7 @@ from PIL import Image
 from torch.utils.data import Dataset, BatchSampler
 import scipy.io as sio
 from pathlib import Path
-from src.data.utils import rotationError, read_pose_from_text, read_time_from_text
+from src.data.utils import rotationError, read_pose_from_text, read_time_from_text, concatenate_pose_changes
 from collections import Counter
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal.windows import triang
@@ -17,8 +17,6 @@ from scipy.ndimage import convolve1d
 
 IMU_FREQ = 10
 
-
-
 class KITTI(Dataset):
     def __init__(
         self,
@@ -26,7 +24,8 @@ class KITTI(Dataset):
         sequence_length=11,
         train_seqs=["00", "01", "02", "04", "06", "08", "09"],
         transform=None,
-        logger=None
+        logger=None,
+        dropout=0.0,
     ):
 
         self.root = Path(root)
@@ -34,6 +33,8 @@ class KITTI(Dataset):
         self.transform = transform
         self.train_seqs = train_seqs
         self.logger = logger
+        self.dropout = dropout
+        self.img_seq_len = [] # Length of each seqeunce after dropout
         self.make_dataset()
 
     def make_dataset(self):
@@ -58,7 +59,24 @@ class KITTI(Dataset):
             fpaths = sorted(
                 (self.root / "sequences/{}/image_2".format(folder)).glob("*.png")
             )
-
+            
+            print("Before Dropping Data:", len(fpaths), len(poses), len(poses_rel), len(timestamps), len(imus))
+            
+            # Create Irregularity in the data by dropping some data points
+            i = 1 
+            while i < len(poses_rel) - 2:
+                if random.random() < self.dropout:
+                    poses_rel[i] = concatenate_pose_changes(poses_rel[i], poses_rel[i + 1])
+                    poses_rel = np.delete(poses_rel, i + 1, axis=0)
+                    poses = np.delete(poses, i, axis=0)
+                    timestamps = np.delete(timestamps, i, axis=0)
+                    imus = np.delete(imus, np.concatenate([np.arange(i * IMU_FREQ, (i + 1) * IMU_FREQ)]), axis=0)
+                    fpaths.pop(i)
+                else:
+                    i += 1
+            
+            print("After Dropping Data:", len(fpaths), len(poses), len(poses_rel), len(timestamps), len(imus))
+            self.img_seq_len.append(len(fpaths))
             for i in range(0, len(fpaths) - self.sequence_length):
                 img_samples = fpaths[i : i + self.sequence_length]
                 # img_samples = no. sequence_len images
@@ -89,45 +107,8 @@ class KITTI(Dataset):
                     "folder": folder,
                 }
                 sequence_set.append(sample)
-        
         self.samples = sequence_set
-        print("Samples number:", len(self.samples))
-        # # Print image statistics
-        # for i in range(len(self.samples)):
-        #     img = np.asarray(Image.open(self.samples[i]["imgs"][0]))
-        #     if np.isnan(img).any():
-        #         self.logger.warning(f"NaN values found in image {i+1}, {self.samples[i]['imgs'][0]}")
-        #     if np.isinf(img).any():
-        #         self.logger.warning(f"Inf values found in image {i+1}, {self.samples[i]['imgs'][0]}.")
-
-        #     self.logger.debug(f"Shape: {img.shape}, Data type: {img.dtype}")
-        #     self.logger.debug(f"Min pixel value: {img.min()}, Max pixel value: {img.max()}")
-        #     self.logger.debug(f"Mean pixel value: {img.mean():.2f}, Std of pixel values: {img.std():.2f}")
-
-        #     if img.min() < 0 or img.max() > 255:
-        #         self.logger.warning(f"Image {i+1} in {self.samples[i]['imgs'][0]} has pixel values out of expected range [0, 255].")
-
-        # Generate weights based on the rotation of the training segments
-        # Weights are calculated based on the histogram of rotations according to the method in https://github.com/YyzHarry/imbalanced-regression
-        rot_list = np.array(
-            [np.cbrt(item["rot"] * 180 / np.pi) for item in self.samples]
-        )
-        rot_range = np.linspace(np.min(rot_list), np.max(rot_list), num=10)
-        indexes = np.digitize(rot_list, rot_range, right=False)
-        num_samples_of_bins = dict(Counter(indexes))
-        emp_label_dist = [
-            num_samples_of_bins.get(i, 0) for i in range(1, len(rot_range) + 1)
-        ]
-
-        # Apply 1d convolution to get the smoothed effective label distribution
-        lds_kernel_window = get_lds_kernel_window(kernel="gaussian", ks=7, sigma=5)
-        eff_label_dist = convolve1d(
-            np.array(emp_label_dist), weights=lds_kernel_window, mode="constant"
-        )
-
-        self.weights = [
-            np.float32(1 / eff_label_dist[bin_idx - 1]) for bin_idx in indexes
-        ]
+        print(len(self.samples))
 
     def __getitem__(self, index):
         sample = self.samples[index]
@@ -142,11 +123,7 @@ class KITTI(Dataset):
         assert np.all(
             np.diff(timestamps) > 0
         ), "Timestamps must be strictly ascending - getitem"
-        # print("Passed Getitem")
-
-        rot = sample["rot"].astype(np.float32)
-        weight = self.weights[index]
-        return imgs, imus, gts, rot, weight, timestamps, folder
+        return imgs, imus, gts, timestamps, folder
 
     def __len__(self):
         return len(self.samples)
@@ -162,7 +139,6 @@ class KITTI(Dataset):
         fmt_str += "{0}{1}\n".format(
             tmp, self.transform.__repr__().replace("\n", "\n" + " " * len(tmp))
         )
-
         return fmt_str
 
 
@@ -194,10 +170,11 @@ class SequenceBoundarySampler(BatchSampler):
         train_seqs=["00", "01", "02", "04", "06", "08", "09"],
         seq_len=11,
         shuffle=True,
+        img_seq_length=None
     ):
         self.root = Path(root)
         self.seq_len = seq_len  # lstm seq length
-        self.img_seq_len = self._find_img_seq_len(train_seqs)
+        self.img_seq_len = self._find_img_seq_len(train_seqs) if not img_seq_length else img_seq_length
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.samples = self._create_samples()

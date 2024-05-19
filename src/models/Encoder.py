@@ -39,7 +39,7 @@ def conv(batchNorm, in_planes, out_planes, kernel_size=3, stride=1, dropout=0):
 class InertialEncoder(nn.Module):
     def __init__(self, opt):
         super(InertialEncoder, self).__init__()
-        self.num_pairs = opt.seq_len - 1 # concatentating pairs of images together. eg. we get 10 pairs from 11 images 
+        self.seq_len = opt.seq_len
         self.encoder_conv = nn.Sequential(
             nn.Conv1d(6, 64, kernel_size=3, padding=1),
             nn.BatchNorm1d(64),
@@ -57,8 +57,9 @@ class InertialEncoder(nn.Module):
         self.proj = nn.Linear(256 * 1 * 11, opt.i_f_len)
 
     def forward(self, x):
+        num_pairs = x.shape[1] // self.seq_len + 1
         x = torch.cat(
-            [x[:, i * 10 : i * 10 + 11, :].unsqueeze(1) for i in range(self.num_pairs)],
+            [x[:, i * 10 : i * 10 + 11, :].unsqueeze(1) for i in range(num_pairs)],
             dim=1,
         )
         batch_size = x.shape[0]

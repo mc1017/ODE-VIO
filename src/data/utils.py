@@ -160,6 +160,36 @@ def path_accu(pose):
         answer.append(pose_)
     return answer
 
+def concatenate_pose_changes(pose1, pose2):
+    """
+    Concatenate two relative poses to find the relative pose from the first frame to the third frame.
+
+    Parameters:
+    pose1 (numpy array): The first relative pose in 6DoF.
+    pose2 (numpy array): The second relative pose in 6DoF.
+
+    Returns:
+    numpy array: The concatenated relative pose in 6DoF.
+    """
+    # Convert the 6DoF poses to 4x4 transformation matrices
+    Rt1 = pose_6DoF_to_matrix(pose1)
+    Rt2 = pose_6DoF_to_matrix(pose2)
+    
+    # Concatenate the poses by multiplying the transformation matrices
+    Rt_combined = Rt1 @ Rt2
+    
+    # Extract the rotation matrix and translation vector from the combined transformation matrix
+    R_combined = Rt_combined[:3, :3]
+    t_combined = Rt_combined[:3, 3]
+    
+    # Convert the rotation matrix back to Euler angles
+    euler_combined = euler_from_matrix(R_combined)
+    
+    # Combine the Euler angles and translation vector into a single 6DoF pose
+    pose_combined = np.concatenate((euler_combined, t_combined), axis=0)
+    
+    return pose_combined
+
 
 def moving_average(x, w):
     return np.convolve(x, np.ones(w), "same") / w

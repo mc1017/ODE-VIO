@@ -22,7 +22,7 @@ parser.add_argument( "--plot_dir", type=str, default="./results", help="path to 
 # Training Configurations
 parser.add_argument( "--experiment_name", type=str, default="experiment", help="experiment name")
 parser.add_argument( "--wandb", default=False, action="store_true", help="whether to use wandb logging")
-parser.add_argument( "--resume", type=str, default=None, help="resume training")
+parser.add_argument( "--resume", type=str, default=None, help="resume training (wandb run id)")
 parser.add_argument( "--pretrain_flownet", type=str, default="./pretrained_models/flownets_bn_EPE2.459.pth.tar", help="wehther to use the pre-trained flownet",)
 parser.add_argument( "--pretrain", type=str, default=None, help="path to the pretrained model")
 parser.add_argument( "--train_seq", type=str, default=["04", "10"], nargs="+", help="sequences for training",)
@@ -46,6 +46,8 @@ parser.add_argument( "--lr_fine", type=float, default=1e-6, help="learning rate 
 parser.add_argument( "--gradient_clip", type=float, default=5, help="gradient clipping norm/clip value")
 
 # Data Augmentation
+parser.add_argument("--data_dropout", type=float, default=0.0, help="irregularity in the dataset by dropping out randomly")
+parser.add_argument("--eval_data_dropout", type=float, default=0.0, help="irregularity in the eval dataset")
 parser.add_argument("--img_w", type=int, default=512, help="image width")
 parser.add_argument("--img_h", type=int, default=256, help="image height")
 parser.add_argument("--v_f_len", type=int, default=512, help="visual feature length")
@@ -91,7 +93,7 @@ def update_status(ep, args, model):
 def train(model, optimizer, train_loader, logger, ep):
     mse_losses = []
     data_len = len(train_loader)
-    for i, (imgs, imus, gts, rot, weight, timestamps, folder) in enumerate(
+    for i, (imgs, imus, gts, timestamps, folder) in enumerate(
         train_loader
     ):
         # imgs.shape, imus.shape = torch.Size([batch_size, 11, 3, 256, 512]), torch.Size([batch_size, 101, 6])
@@ -99,7 +101,6 @@ def train(model, optimizer, train_loader, logger, ep):
         imgs = imgs.cuda().float()
         imus = imus.cuda().float()
         gts = gts.cuda().float()
-        weight = weight.cuda().float()
         timestamps = timestamps.cuda().float()
         optimizer.zero_grad()
 
@@ -136,8 +137,6 @@ def train(model, optimizer, train_loader, logger, ep):
         if i % args.print_frequency == 0:
             message = f"Epoch: {ep}, iters: {i}/{data_len}, pose loss: {pose_loss.item():.6f}, angle_loss: {angle_loss.item():.6f}, translation_loss: {translation_loss.item():.6f}, loss: {loss.item():.6f}"
             logger.info(message)
-            if args.wandb:
-                wandb.log({"loss": loss.item(), "angle_loss": angle_loss.item(), "translation_loss": translation_loss.item()})
         mse_losses.append(pose_loss.item())
     return np.mean(mse_losses)
 
@@ -174,7 +173,8 @@ def main():
         sequence_length=args.seq_len,
         train_seqs=args.train_seq,
         transform=transform_train,
-        logger=debug_logger
+        logger=debug_logger,
+        dropout=args.data_dropout,
     )
 
     # Using batch sampler here to preserve the sequence boundaries, preventing non-ascending timestamps
@@ -184,6 +184,7 @@ def main():
         train_seqs=args.train_seq,
         seq_len=args.seq_len,
         shuffle=args.shuffle,
+        img_seq_length=train_dataset.img_seq_len,
     )
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -244,7 +245,7 @@ def main():
         logger.info(message)
         best, t_rel, r_rel, t_rmse, r_rmse  = evaluate(model, tester, ep, best)
         if args.wandb:
-            wandb.log({"t_rel": t_rel, "r_rel": r_rel, "t_rmse": t_rmse, "r_rmse": r_rmse, "best_t_rel": best})
+            wandb.log({"t_rel": t_rel, "r_rel": r_rel, "t_rmse": t_rmse, "r_rmse": r_rmse, "best_t_rel": best, "avg_pose_loss": avg_pose_loss})
     message = f"Training finished, best t_rel: {best:.4f}"
     logger.info(message)
 
