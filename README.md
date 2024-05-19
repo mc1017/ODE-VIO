@@ -10,6 +10,10 @@ Here, we provide the implementation of two architectures within the family of Ne
 
 We use KITTI Odometry dataset as benchmark and compare it against SOTA algorithms. 
 
+## Versions
+
+Cuda 12.4 is used. 
+
 
 ## To start training
 ```
