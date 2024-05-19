@@ -33,6 +33,7 @@ parser.add_argument( "--print_frequency", type=int, default=10, help="print freq
 
 # Training Hyperparameters
 parser.add_argument( "--optimizer", type=str, default="Adam", help="type of optimizer [Adam, SGD]")
+parser.add_argument( "--grad_accumulation_steps", type=int, default=1, help="gradient accumulation steps before updating")
 parser.add_argument( "--freeze_encoder", default=False, action="store_true", help="freeze the encoder or not")
 parser.add_argument( "--weight_decay", type=float, default=5e-6, help="weight decay for the optimizer")
 parser.add_argument("--batch_size", type=int, default=26, help="batch size")
@@ -130,10 +131,13 @@ def train(model, optimizer, train_loader, logger, ep):
         loss = pose_loss
         loss.backward()
         
-        # Gradient Clipping
-        if args.gradient_clip:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=args.gradient_clip)
-        optimizer.step()
+        # Gradient accumulation
+        if (i + 1) % args.grad_accumulation_steps == 0 or (i + 1) == data_len:
+            if args.gradient_clip:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=args.gradient_clip)
+            optimizer.step()
+            optimizer.zero_grad()
+            
         if i % args.print_frequency == 0:
             message = f"Epoch: {ep}, iters: {i}/{data_len}, pose loss: {pose_loss.item():.6f}, angle_loss: {angle_loss.item():.6f}, translation_loss: {translation_loss.item():.6f}, loss: {loss.item():.6f}"
             logger.info(message)

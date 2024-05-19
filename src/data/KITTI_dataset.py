@@ -108,7 +108,6 @@ class KITTI(Dataset):
                 }
                 sequence_set.append(sample)
         self.samples = sequence_set
-        print(len(self.samples))
 
     def __getitem__(self, index):
         sample = self.samples[index]
