@@ -3,9 +3,9 @@ from src.models import FusionModule
 
 
 # The pose estimation network
-class Pose_RNN(nn.Module):
+class PoseRNN(nn.Module):
     def __init__(self, opt):
-        super(Pose_RNN, self).__init__()
+        super(PoseRNN, self).__init__()
 
         # The main RNN network
         f_len = opt.v_f_len + opt.i_f_len

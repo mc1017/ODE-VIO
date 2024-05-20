@@ -32,6 +32,7 @@ parser.add_argument("--workers", type=int, default=8, help="number of workers in
 parser.add_argument( "--print_frequency", type=int, default=10, help="print frequency for loss values")
 
 # Training Hyperparameters
+parser.add_argument( "--model_type", type=str, default="ode-rnn", help="type of model [rnn, ode, ode-rnn, ltc, cfc]")
 parser.add_argument( "--optimizer", type=str, default="Adam", help="type of optimizer [Adam, SGD]")
 parser.add_argument( "--grad_accumulation_steps", type=int, default=1, help="gradient accumulation steps before updating")
 parser.add_argument( "--freeze_encoder", default=False, action="store_true", help="freeze the encoder or not")
@@ -65,8 +66,9 @@ parser.add_argument( "--ode_num_layers", type=int, default=3, help="number of la
 parser.add_argument( "--ode_activation_fn", type=str, default="tanh", help="activation function [softplus, relu, leaky_relu, tanh]",)
 parser.add_argument( "--ode_solver", type=str, default="dopri5", help="ODE solvers [dopri5, heun, euler, runge_kutta, tsit5]",)
 
-# RNN Regressor Parameters for ODE-RNN Implementation
-parser.add_argument( "--rnn_type", type=str, default="rnn", help="type of RNN [rnn, lstm, gru]") 
+# RNN Regressor Parameters for ODE-RNN/NCP Implementation
+parser.add_argument( "--ode_rnn_type", type=str, default="rnn", help="type of RNN [rnn, lstm, gru]") 
+parser.add_argument( "--rnn_num_layers", type=int, default=2, help="number of layers for RNN")
 parser.add_argument( "--rnn_hidden_size", type=int, default=1024, help="size of the RNN latent") 
 parser.add_argument( "--rnn_dropout_out", type=float, default=0, help="dropout for the RNN output layer",)
 args = parser.parse_args()
@@ -94,6 +96,7 @@ def update_status(ep, args, model):
 def train(model, optimizer, train_loader, logger, ep):
     mse_losses = []
     data_len = len(train_loader)
+    optimizer.zero_grad()
     for i, (imgs, imus, gts, timestamps, folder) in enumerate(
         train_loader
     ):
@@ -103,7 +106,6 @@ def train(model, optimizer, train_loader, logger, ep):
         imus = imus.cuda().float()
         gts = gts.cuda().float()
         timestamps = timestamps.cuda().float()
-        optimizer.zero_grad()
 
         # imgs.shape, imus.shape, timestamps.shape = torch.Size([32, 11, 3, 256, 512]) torch.Size([32, 101, 6]) torch.Size([32, 11])
         poses, _ = model(

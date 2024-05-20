@@ -60,8 +60,6 @@ class KITTI(Dataset):
                 (self.root / "sequences/{}/image_2".format(folder)).glob("*.png")
             )
             
-            print("Before Dropping Data:", len(fpaths), len(poses), len(poses_rel), len(timestamps), len(imus))
-            
             # Create Irregularity in the data by dropping some data points
             i = 1 
             while i < len(poses_rel) - 2:
@@ -75,7 +73,6 @@ class KITTI(Dataset):
                 else:
                     i += 1
             
-            print("After Dropping Data:", len(fpaths), len(poses), len(poses_rel), len(timestamps), len(imus))
             self.img_seq_len.append(len(fpaths))
             for i in range(0, len(fpaths) - self.sequence_length):
                 img_samples = fpaths[i : i + self.sequence_length]

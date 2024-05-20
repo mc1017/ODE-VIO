@@ -2,19 +2,27 @@ import torch
 import torch.nn as nn
 from torch.nn.init import kaiming_normal_
 from src.models.Encoder import ImageEncoder, InertialEncoder
-from src.models.PoseODERNN import PoseODERNN
-
-
+from src.models.PoseODERNN import PoseODERNN, PoseODERNN_2
+from src.models.PoseRNN import PoseRNN
+from src.models.PoseNCP import PoseNCP
 
 class DeepVIO(nn.Module):
     def __init__(self, opt):
         super(DeepVIO, self).__init__()
         self.Image_net = ImageEncoder(opt)
         self.Inertial_net = InertialEncoder(opt)
-        self.Pose_net = PoseODERNN(opt)
+        self.Pose_net = self._set_pose_model(opt)
         self.opt = opt
         initialization(self)
-
+    
+    def _set_pose_model(self, opt):
+        if opt.model_type == "rnn":
+            return PoseRNN(opt)
+        elif opt.model_type == "ode-rnn":
+            return PoseODERNN_2(opt)
+        elif opt.model_type == "ltc":
+            return PoseNCP(opt)
+    
     def forward(
         self,
         img,

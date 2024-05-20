@@ -53,7 +53,7 @@ class data_partition:
         )
         self.img_paths.sort()
         
-        print("Before Dropping Data:", len(self.poses), len(self.poses_rel), len(self.timestamps), len(self.imus))
+        
         # Create Irregularity in the data by dropping some data points
         i = 1 
         while i < len(self.poses_rel) - 2:
@@ -66,7 +66,6 @@ class data_partition:
                 self.img_paths.pop(i)
             else:
                 i += 1
-        print("After Dropping Data:", len(self.poses), len(self.poses_rel), len(self.timestamps), len(self.imus))
 
         self.img_paths_list, self.poses_list, self.imus_list, self.timestamps_list = (
             [],
@@ -84,7 +83,6 @@ class data_partition:
                 self.imus[start * 10 : (start + self.seq_len - 1) * 10 + 1]
             )
             start += self.seq_len - 1
-        print(len(self.imus[start * 10 :]))
         self.img_paths_list.append(self.img_paths[start:])
         self.poses_list.append(self.poses_rel[start:])
         self.timestamps_list.append(self.timestamps[start:])

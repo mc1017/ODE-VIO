@@ -136,3 +136,13 @@ Can try: 1. 4 ode layers vs 2 ode layers + Gradient Accumulation.
 
 58. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] batch size 12 4 ode layers. If it performs better then 57 then it is ode that's the bottleneck
 59. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] batch size 26 2 ode layers. 
+
+Test using multiple RNN layers. Maybe it is the bottleneck. Try it with regressing output like in Visual Selective VIO.  
+61. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 2 layers of rnn. regress directly on output
+62. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 2 layers of rnn. regress on difference of initial and new states
+63. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 3 layers of rnn. regress on output directly. 
+
+
+
+
+100. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] first try ltc configurations regressing on the change of hidden state. 

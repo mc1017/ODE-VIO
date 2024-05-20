@@ -12,3 +12,4 @@ black
 ruff
 torchcde==0.2.5
 wandb==0.16.6
+ncps==0.0.7
