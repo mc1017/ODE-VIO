@@ -125,7 +125,7 @@ class PoseODERNN_2(nn.Module):
         self.rnn_drop_out = nn.Dropout(opt.rnn_dropout_out)
         # The output regressor network, convert relative hidden state change into relative pose change
         self.regressor = nn.Sequential(
-            nn.Linear(self.f_len * self.rnn_num_layers, 128),
+            nn.Linear(self.f_len, 128),
             nn.LeakyReLU(0.1, inplace=True),
             nn.Linear(128, 6),
         )

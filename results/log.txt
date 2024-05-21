@@ -111,18 +111,19 @@ Also changed loggin formats
 47. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] increase ode_layers to 5. non frozen encoder. Does not outperform 3 layers.
 
 Added data dropout functionality
-48. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] increase ode_layers to 5. non frozen encoder same config but data_dropout 0.1, eval_data_dropout 0.1
+48. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] increase ode_layers to 5. non frozen encoder same config but data_dropout 0.1, eval_data_dropout 0.1. Dropout does affect training. Ode_layers does not help a lot. 
 
 Maybe try using soft/hard fusion would work better. 
-49. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] ode_layers 5. frozen encoder for space, soft cat
-50. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] ode_layers 5. frozen encoder for space, hard cat
+49. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] ode_layers 5. frozen encoder for space, soft cat. 
+50. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] ode_layers 5. frozen encoder for space, hard cat.
 
-
+soft/hard cat are better than cat, but soft> hard
 
 50. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10], run with gru to see if its better. 
 51. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10], run with SGD optimiser with GRU
 GRU still rubbish 
-52. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10], run with SGD optimiser with rnn
+
+52. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10], run with SGD optimiser with rnn. SGD is rubbish
 53. train_seq [00 02 08 09], val_seq [00 01 02 04 05 06 07 08 09 10], run with SGD optimiser with rnn, old lr [5e-4, 5e-5 1e-6] new lr [1e-4, 1e-5, 1e-6]
 Both does not work well. SGD Optimiser is not as good as Adam. Revert back to Adam
 
@@ -134,11 +135,11 @@ Try new architecture levels. Maybe increase ODE Hidden?
 Between 55 and 57, 57 does not converge but 55 performs well. Could be due to the batch size difference/ ODE layer is the bottleneck.
 Can try: 1. 4 ode layers vs 2 ode layers + Gradient Accumulation. 
 
-58. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] batch size 12 4 ode layers. If it performs better then 57 then it is ode that's the bottleneck
-59. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] batch size 26 2 ode layers. 
+58. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] batch size 12 4 ode layers. If it performs better then 57 then it is ode that's the bottleneck runs better but not great
+59. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] batch size 26 2 ode layers.  runs ok but not great
 
 Test using multiple RNN layers. Maybe it is the bottleneck. Try it with regressing output like in Visual Selective VIO.  
-61. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 2 layers of rnn. regress directly on output
+61. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 2 layers of rnn. regress directly on output. 
 62. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 2 layers of rnn. regress on difference of initial and new states
 63. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 3 layers of rnn. regress on output directly. 
 

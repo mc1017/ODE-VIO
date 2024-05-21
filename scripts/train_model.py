@@ -201,7 +201,7 @@ def main():
     gpu_id = set_gpu_ids(args)
 
     # Model initialization
-    model = DeepVIO(args)
+    model = DeepVIO_CDE(args)
 
     # Continual training or not
     load_pretrained_model(model, args)
@@ -217,9 +217,11 @@ def main():
         model.Image_net.load_state_dict(model_dict)
         logger.info("Pretrained flownet loaded")
 
-        if args.freeze_encoder:
-            for param in model.Image_net.parameters():
-                param.requires_grad = False
+    if args.freeze_encoder:
+        for param in model.Image_net.parameters():
+            param.requires_grad = False
+        logger.info("Frozen encoder")
+            
     # Initialize the tester
     tester = KITTI_tester(args)
 
