@@ -6,6 +6,7 @@ import wandb
 from src.data.KITTI_dataset import KITTI, SequenceBoundarySampler
 from src.data.KITTI_eval import KITTI_tester
 from src.models.DeepVIO import DeepVIO
+from src.models.DeepVIO_CDE import DeepVIO_CDE
 from utils.params import set_gpu_ids, load_pretrained_model, get_optimizer
 from utils.utils import setup_experiment_directories, setup_training_logger, setup_debug_logger, print_tensor_stats
 from scripts.transforms import get_transforms
@@ -58,6 +59,8 @@ parser.add_argument( "--imu_dropout", type=float, default=0, help="dropout for t
 parser.add_argument( "--hflip", default=False, action="store_true", help="whether to use horizonal flipping as augmentation",)
 parser.add_argument( "--color", default=False, action="store_true", help="whether to use color augmentations",)
 parser.add_argument("--seq_len", type=int, default=11, help="sequence length of images")
+
+# Fusion Module Parameters
 parser.add_argument( "--fuse_method", type=str, default="cat", help="fusion method of encoded IMU and Images[cat, soft, hard]")
 
 # ODE Parameters
@@ -71,7 +74,16 @@ parser.add_argument( "--ode_rnn_type", type=str, default="rnn", help="type of RN
 parser.add_argument( "--rnn_num_layers", type=int, default=2, help="number of layers for RNN")
 parser.add_argument( "--rnn_hidden_size", type=int, default=1024, help="size of the RNN latent") 
 parser.add_argument( "--rnn_dropout_out", type=float, default=0, help="dropout for the RNN output layer",)
+
+# CDE Parameters 
+parser.add_argument( "--cde_hidden_dim", type=int, default=128, help="size of the CDE latent")
+parser.add_argument( "--cde_num_layers", type=int, default=3, help="number of layers for the cDE")
+parser.add_argument( "--cde_activation_fn", type=str, default="tanh", help="activation function [softplus, relu, leaky_relu, tanh]",)
+parser.add_argument( "--adjoint", default=False, action="store_true", help="whether to use adjoint method",)
+
 args = parser.parse_args()
+
+
 
 # Set the random seed
 torch.manual_seed(args.seed)
