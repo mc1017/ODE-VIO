@@ -136,14 +136,24 @@ Between 55 and 57, 57 does not converge but 55 performs well. Could be due to th
 Can try: 1. 4 ode layers vs 2 ode layers + Gradient Accumulation. 
 
 58. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] batch size 12 4 ode layers. If it performs better then 57 then it is ode that's the bottleneck runs better but not great
-59. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] batch size 26 2 ode layers.  runs ok but not great
+59. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] batch size 48 = 12*4 gradient accumulation, 2 ode layers.  runs ok but not great
+60. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] batch size 64 = 32 * 2 gradient accumulation 4 ode layers, hard fusion, froze encoder
+
 
 Test using multiple RNN layers. Maybe it is the bottleneck. Try it with regressing output like in Visual Selective VIO.  
 61. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 2 layers of rnn. regress directly on output. 
 62. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 2 layers of rnn. regress on difference of initial and new states
-63. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 3 layers of rnn. regress on output directly. 
+63. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 4 layer ode 3 layers of rnn. regress on output directly.
 
 
+
+70. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10]. 48 batch size. 12*4 gradient accumulation. 4 layers rnn, 4 layers ode. regresson output directly.  Exploded in loss. 
+71. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10]. 48 batch size. 12*4 gradient accumulation. 4 layers rnn, 4 layers ode. regresson output directly, lower learning rate [5e-5, 5e-6, 5e-7]
+72. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10]. 48 batch size. Even lower lr [5e-5, 5e-6, 5e-7]
+73. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10]. 48 batch size. 5rnn, 3 ode [1e-5, 1e-6, 1e-7]
+
+it seems that lower lr actually performed worse. Increase initial lr
+74. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 80 batch size, 20*4, 3 layers rnn, 2 layers ode [1e-3, 1e-4, 1e-5]
 
 
 100. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] first try Neural CDE. Using Adjoint, memory takes 10GB with 2cde layers, 256 cde hidden

@@ -25,6 +25,7 @@ class DeepVIO_CDE(nn.Module):
             num_hidden_layers=opt.cde_num_layers,
             activation=opt.cde_activation_fn,
         )
+        self.ode_solver = opt.ode_solver
         self.regressor = nn.Sequential(
             nn.Linear(self.cde_hidden_dim, 128),
             nn.LeakyReLU(0.1, inplace=True),
@@ -50,6 +51,7 @@ class DeepVIO_CDE(nn.Module):
         # fv.shape = [16, 10, 512] fi.shpae =[16, 10, 256]
         fused_features = self.fuse(fv, fi)
         fused_features = self.reduction_net(fused_features)
+        print("compressed", fused_features.shape)
         
         
         # Interpolate features to make them continuous
@@ -67,9 +69,9 @@ class DeepVIO_CDE(nn.Module):
         # print("HC, shape of HC", hc.shape)
         eval_times = torch.arange(0, 10, dtype=torch.float32).to(fused_features.device)
         kwargs = dict(adjoint_params=tuple(self.cde_func.parameters()) + (coeffs, t)) if self.adjoint else {}
-        h_T = torchcde.cdeint(X=X, func=self.cde_func, z0=hc, t=eval_times, adjoint=self.adjoint, atol=1e-5, rtol=1e-3, **kwargs)
+        h_T = torchcde.cdeint(X=X, func=self.cde_func, z0=hc, t=eval_times, adjoint=self.adjoint, atol=1e-6, rtol=1e-4, method=self.ode_solver, **kwargs)
         poses = self.regressor(h_T)
-        h_T = h_T[:, -1, :]  # Take the last hidden state
+        h_T = h_T[:, -1, :].squeeze(1)  # Take the last hidden state
         return poses, h_T
 
 
@@ -85,35 +87,3 @@ def initialization(net):
             kaiming_normal_(m.weight.data)
             if m.bias is not None:
                 m.bias.data.zero_()
-        elif isinstance(m, nn.LSTM):
-            for name, param in m.named_parameters():
-                if "weight_ih" in name:
-                    torch.nn.init.kaiming_normal_(param.data)
-                elif "weight_hh" in name:
-                    torch.nn.init.kaiming_normal_(param.data)
-                elif "bias_ih" in name:
-                    param.data.fill_(0)
-                elif "bias_hh" in name:
-                    param.data.fill_(0)
-                    n = param.size(0)
-                    start, end = n // 4, n // 2
-                    param.data[start:end].fill_(1.0)
-        elif isinstance(m, nn.GRUCell):
-            # Xavier uniform initialization is designed to maintain a balanced variance of activations and gradients throughout the network, across different layers during the initial stages of training.
-            # Orthogonal initialization ensures that the weight matrices have orthogonal rows (or columns, depending on the dimensionality), which can be beneficial for RNNs including GRUs.
-            for name, param in m.named_parameters():
-                if "weight_ih" in name:
-                    torch.nn.init.xavier_uniform_(param.data)
-                elif "weight_hh" in name:
-                    torch.nn.init.orthogonal_(param.data)
-                elif "bias" in name:
-                    param.data.fill_(0)
-        elif isinstance(m, nn.RNNCell):
-            for name, param in m.named_parameters():
-                if "weight_ih" in name or "weight_hh" in name:
-                    torch.nn.init.xavier_uniform_(param.data)
-                elif "bias" in name:
-                    param.data.fill_(0)
-        elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
-            m.weight.data.fill_(1)
-            m.bias.data.zero_()
