@@ -1,12 +1,36 @@
 import torch
 import torch.nn as nn
-from torch.nn.init import kaiming_normal_
 from src.models.Encoder import ImageEncoder, InertialEncoder
-from src.models.PoseODERNN import PoseODERNN, PoseODERNN_2
+from src.models.PoseODERNN import PoseODERNN
 from src.models.PoseRNN import PoseRNN
 from src.models.PoseNCP import PoseNCP
+from src.models.PoseCDE import PoseCDE
 
 class DeepVIO(nn.Module):
+    """
+    Deep Visual-Inertial Odometry (VIO) model that combines data from visual and inertial sensors to estimate poses.
+
+    This class integrates separate encoders for image and inertial data streams, selecting an appropriate model for pose estimation based on configuration options. It supports various pose estimation models such as RNNs, ODE-RNNs, CDEs, and NCPs.
+
+    Attributes:
+        Image_net (nn.Module): Image encoder model to process image sequences.
+        Inertial_net (nn.Module): Inertial encoder model to process IMU data.
+        Pose_net (nn.Module): Dynamically configured pose estimation model based on the specified model type.
+        opt (Namespace): Configuration options that include model settings and hyperparameters.
+
+    Methods:
+        _set_pose_model(opt): Configures and returns the pose estimation model based on the `model_type` in options.
+        forward(img, imu, timestamps, hc=None): Processes the input image and IMU data to compute pose estimations.
+
+    Parameters:
+        img (Tensor): Input tensor for image data with dimensions [batch_size, sequence_length, channels, height, width].
+        imu (Tensor): Input tensor for inertial measurements with dimensions [batch_size, sequence_length (imu so 10 times img), feature_size].
+        timestamps (Tensor): Sequence of timestamps associated with each input sample.
+        hc (Tensor, optional): Optional initial hidden state for certain pose models.
+
+    Returns:
+        Tuple[Tensor, Tensor]: The estimated poses and the last hidden state from the pose network.
+    """
     def __init__(self, opt):
         super(DeepVIO, self).__init__()
         self.Image_net = ImageEncoder(opt)
@@ -19,42 +43,23 @@ class DeepVIO(nn.Module):
         if opt.model_type == "rnn":
             return PoseRNN(opt)
         elif opt.model_type == "ode-rnn":
-            return PoseODERNN_2(opt)
+            return PoseODERNN(opt)
+        elif opt.model_type == "cde":
+            return PoseCDE(opt)
         elif opt.model_type == "ltc":
             return PoseNCP(opt)
-    
-    def forward(
-        self,
-        img,
-        imu,
-        timestamps,
-        is_first=True,
-        hc=None,
-    ):
-        # Image Size 256x512, specified in args. 3 channels, 11 sequence length, batch size 16
-        # img.shape = [16, 11, 3, 256, 512] imu.shape[16, 101, 6]
+        
+    def forward( self, img, imu, timestamps, hc=None):
+        
+        # Encode image and imu data
         fv, fi = self.Image_net(img), self.Inertial_net(imu)
-        # fv.shape = [16, 10, 512] fi.shpae =[16, 10, 256]
-        seq_len = fv.shape[1]
-
-        poses = []
-        for i in range(seq_len):
-            # fv.shape = [16, 10, 512], fi.shape = [16, 10, 256], timestamps.shape = [16, 11]
-            pose, hc = self.Pose_net(
-                fv[:, i : i + 1, :],
-                None,
-                fi[:, i : i + 1, :],
-                None,
-                timestamps[:, i : i + 2],
-                prev=hc,
-            )
-            poses.append(pose)
-        poses = torch.cat(poses, dim=1)
-        return poses, hc.detach()
+        
+        # Obtain pose estimations
+        poses, h_T = self.Pose_net(fv, fi, timestamps, prev=hc)
+        return poses, h_T
 
 
 def initialization(net):
-    # Initilization
     for m in net.modules():
         if (
             isinstance(m, nn.Conv2d)
@@ -62,7 +67,7 @@ def initialization(net):
             or isinstance(m, nn.ConvTranspose2d)
             or isinstance(m, nn.Linear)
         ):
-            kaiming_normal_(m.weight.data)
+            torch.nn.init.kaiming_normal_(m.weight.data)
             if m.bias is not None:
                 m.bias.data.zero_()
         elif isinstance(m, nn.LSTM):
@@ -79,8 +84,11 @@ def initialization(net):
                     start, end = n // 4, n // 2
                     param.data[start:end].fill_(1.0)
         elif isinstance(m, nn.GRUCell):
-            # Xavier uniform initialization is designed to maintain a balanced variance of activations and gradients throughout the network, across different layers during the initial stages of training.
-            # Orthogonal initialization ensures that the weight matrices have orthogonal rows (or columns, depending on the dimensionality), which can be beneficial for RNNs including GRUs.
+            """
+            Note:
+            - Xavier uniform initialization is designed to maintain a balanced variance of activations and gradients throughout the network, across different layers during the initial stages of training.
+            - Orthogonal initialization ensures that the weight matrices have orthogonal rows (or columns, depending on the dimensionality), which can be beneficial for RNNs including GRUs.
+            """
             for name, param in m.named_parameters():
                 if "weight_ih" in name:
                     torch.nn.init.xavier_uniform_(param.data)

@@ -3,7 +3,7 @@ import torch.nn as nn
 import torchcde
 from torch.nn.init import kaiming_normal_
 from src.models.Encoder import ImageEncoder, InertialEncoder
-from src.models.PoseODERNN import PoseODERNN, PoseODERNN_2
+from src.models.PoseODERNN import PoseODERNN
 from src.models.PoseRNN import PoseRNN
 from src.models.PoseNCP import PoseNCP
 from src.models.FusionModule import FusionModule

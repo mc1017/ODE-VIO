@@ -10,7 +10,7 @@ class PoseNCP(nn.Module):
 
         # The main network configuration
         self.f_len = opt.v_f_len + opt.i_f_len
-        self.rnn_hidden_size = opt.rnn_hidden_size
+        self.rnn_hidden_dim = opt.rnn_hidden_dim
         self.fuse_method = opt.fuse_method
         self.rnn_drop_out = opt.rnn_dropout_out
         self.ncp_type = opt.model_type
@@ -18,7 +18,7 @@ class PoseNCP(nn.Module):
         self.fuse = FusionModule(feature_dim=self.f_len, fuse_method=self.fuse_method)
 
         # Configure the NCP wiring
-        wiring = FullyConnected(self.f_len, self.rnn_hidden_size)
+        wiring = FullyConnected(self.f_len, self.rnn_hidden_dim)
 
         # Choose NCP RNN type
         if self.ncp_type == 'ltc':
@@ -30,7 +30,7 @@ class PoseNCP(nn.Module):
 
         # The output regressor network, convert relative hidden state change into relative pose change
         self.regressor = nn.Sequential(
-            nn.Linear(self.rnn_hidden_size, 128),
+            nn.Linear(self.rnn_hidden_dim, 128),
             nn.LeakyReLU(0.1, inplace=True),
             nn.Linear(128, 6),
         )
@@ -47,7 +47,7 @@ class PoseNCP(nn.Module):
         initial_hidden_states = (
             prev
             if prev is not None
-            else torch.zeros(batch_size, self.rnn_hidden_size).to(fused_features.device)
+            else torch.zeros(batch_size, self.rnn_hidden_dim).to(fused_features.device)
         )
 
         if do_profile:

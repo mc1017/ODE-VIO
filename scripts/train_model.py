@@ -72,18 +72,18 @@ parser.add_argument( "--ode_solver", type=str, default="dopri5", help="ODE solve
 # RNN Regressor Parameters for ODE-RNN/NCP Implementation
 parser.add_argument( "--ode_rnn_type", type=str, default="rnn", help="type of RNN [rnn, lstm, gru]") 
 parser.add_argument( "--rnn_num_layers", type=int, default=2, help="number of layers for RNN")
-parser.add_argument( "--rnn_hidden_size", type=int, default=1024, help="size of the RNN latent") 
+parser.add_argument( "--rnn_hidden_dim", type=int, default=1024, help="size of the RNN latent") 
 parser.add_argument( "--rnn_dropout_out", type=float, default=0, help="dropout for the RNN output layer",)
 
 # CDE Parameters 
 parser.add_argument( "--cde_hidden_dim", type=int, default=128, help="size of the CDE latent")
 parser.add_argument( "--cde_num_layers", type=int, default=3, help="number of layers for the cDE")
 parser.add_argument( "--cde_activation_fn", type=str, default="tanh", help="activation function [softplus, relu, leaky_relu, tanh]",)
+parser.add_argument( "--cde_solver", type=str, default="dopri5", help="ODE solvers [dopri5, heun, euler, runge_kutta, tsit5]",)
 parser.add_argument( "--adjoint", default=False, action="store_true", help="whether to use adjoint method",)
 
+
 args = parser.parse_args()
-
-
 
 # Set the random seed
 torch.manual_seed(args.seed)
@@ -124,7 +124,6 @@ def train(model, optimizer, train_loader, logger, ep):
             imgs,
             imus,
             timestamps,
-            is_first=True,
             hc=None,
         )
         
@@ -213,7 +212,7 @@ def main():
     gpu_id = set_gpu_ids(args)
 
     # Model initialization
-    model = DeepVIO_CDE(args)
+    model = DeepVIO(args)
 
     # Continual training or not
     load_pretrained_model(model, args)
