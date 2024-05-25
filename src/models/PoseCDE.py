@@ -12,11 +12,12 @@ class PoseCDE(nn.Module):
 
     Attributes:
         f_len (int): Total length of fused features.
-        fuse (FusionModule): Module to fuse image and IMU features.
-        reduction_net (nn.Linear): Linear layer to reduce dimensionality of fused features.
         input_dim (int): Input dimension to the CDE function, calculated as reduced feature size plus time.
         cde_hidden_dim (int): Hidden dimension size for the CDE function.
         cde_func (CDEFunc): The neural CDE function configured with specific feature and hidden dimensions.
+        fuse (FusionModule): Module to fuse image and IMU features.
+        reduction_net (nn.Linear): Linear layer to reduce dimensionality of fused features.
+        initial_net (nn.Linear): If initial state is not provided, it should depend on the initial observation
         regressor (nn.Sequential): Sequence of layers to regress the final hidden state to pose estimates.
         opt (Namespace): Configuration options passed as an argument.
         adjoint (bool): Flag to use adjoint method for backpropagation to reduce memory usage.
@@ -48,6 +49,7 @@ class PoseCDE(nn.Module):
       
         self.fuse = FusionModule(self.f_len ,opt.fuse_method)
         self.reduction_net = nn.Linear(self.f_len, opt.cde_hidden_dim)
+        self.initial = torch.nn.Linear(opt.cde_hidden_dim+1, opt.cde_hidden_dim)
         self.cde_func = CDEFunc(feature_dim=self.input_dim, 
             hidden_dim=opt.cde_hidden_dim,
             num_hidden_layers=opt.cde_num_layers,
@@ -66,29 +68,27 @@ class PoseCDE(nn.Module):
         fused_features = self.fuse(fv, fi)
         fused_features = self.reduction_net(fused_features)
         batch_size, seq_len, _ = fused_features.shape
-        
-        # Initialise initial state
-        h_0 = torch.zeros(fv.size(0), self.cde_hidden_dim).to(fused_features.device) if prev is None else prev
             
-        
-        
         # Subtract the first timestamp from all timestamps to get time differences
         # Remove the first timestamp and add a dimension
         ts_diff = ts - ts[:, :1]  
         ts_diff = ts_diff[:, 1:].unsqueeze(-1) 
-        print(ts_diff[0, :])
-        x = torch.cat([ts, fused_features], dim=2)
+        x = torch.cat([ts_diff, fused_features], dim=2)
         
         # Interpolate features to create a continuous path
         coeffs = cde.hermite_cubic_coefficients_with_backward_differences(x)
         X = cde.CubicSpline(coeffs)
         
+        # Initialise initial state
+        X0 = X.evaluate(X.interval[0])
+        h_0 = self.initial(X0) if prev is None else prev
+        
         # Evaluation timestamps
-        eval_times = torch.arange(0.1, 1, dtype=torch.float32).to(fused_features.device)
+        eval_times = torch.linspace(0.1, 1.0, 10, dtype=torch.float32).to(fused_features.device)
         
         # Integrate using the Neural CDE
         kwargs = dict(adjoint_params=tuple(self.cde_func.parameters()) + (coeffs, ts_diff)) if self.adjoint else {}
-        h_T = cde.cdeint(X=X, func=self.cde_func, z0=h_0, t=eval_times, adjoint=self.adjoint, atol=1e-6, rtol=1e-4, solver=self.solver, **kwargs)
+        h_T = cde.cdeint(X=X, func=self.cde_func, z0=h_0, t=eval_times, adjoint=self.adjoint, atol=1e-6, rtol=1e-4, method=self.solver, **kwargs)
         
         # Regress the relative poses
         poses = self.regressor(h_T)
