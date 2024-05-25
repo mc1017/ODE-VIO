@@ -119,7 +119,7 @@ class KITTI_tester:
 
         self.args = args
 
-    def test_one_path(self, net, df, num_gpu=1, p=0.5):
+    def test_one_path(self, net, df, num_gpu=1):
         hc = None
         pose_list = []
         for i, (image_seq, imu_seq, gt_seq, ts_seq) in tqdm(
@@ -145,13 +145,13 @@ class KITTI_tester:
         # return pose_est, dec_est, prob_est
         return pose_est, None, None
 
-    def eval(self, net, num_gpu=1, p=0.5):
+    def eval(self, net, num_gpu=1):
         self.errors = []
         self.est = []
         for i, seq in enumerate(self.args.val_seq):
             print(f"testing sequence {seq}")
             pose_est, dec_est, prob_est = self.test_one_path(
-                net, self.dataloader[i], num_gpu=num_gpu, p=p
+                net, self.dataloader[i], num_gpu=num_gpu 
             )
             (
                 pose_est_global,
