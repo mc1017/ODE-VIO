@@ -73,11 +73,11 @@ class PoseCDE(nn.Module):
         # Remove the first timestamp and add a dimension
         ts_diff = ts - ts[:, :1]  
         ts_diff = ts_diff[:, 1:].unsqueeze(-1) 
-        x = torch.cat([ts_diff, fused_features], dim=2)
+        x = torch.cat([ts_diff, fused_features], dim=-1)
         
         # Interpolate features to create a continuous path
-        coeffs = cde.hermite_cubic_coefficients_with_backward_differences(x)
-        X = cde.CubicSpline(coeffs)
+        coeffs = cde.linear_interpolation_coeffs(x, rectilinear=0)
+        X = cde.LinearInterpolation(coeffs)
         
         # Initialise initial state
         X0 = X.evaluate(X.interval[0])

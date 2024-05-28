@@ -106,6 +106,7 @@ def main():
 
     model.load_state_dict(torch.load(args.pretrain))
     print('load model %s'%args.pretrain)
+    print('Dropout percentage:', args.eval_data_dropout)
         
     # Feed model to GPU
     model.cuda(gpu_id)
