@@ -121,7 +121,6 @@ class PoseODERNN(nn.Module):
             solver = to.Euler(term=term)
         else:
             raise ValueError(f"Solver {ode_solver} not supported")
-        print("ODE Solver:", ode_solver)
         return solver
 
     def _set_rnn(self, rnn_type: str):

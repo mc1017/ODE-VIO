@@ -145,8 +145,31 @@ Test using multiple RNN layers. Maybe it is the bottleneck. Try it with regressi
 62. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 2 layers of rnn. regress on difference of initial and new states
 63. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 4 layer ode 3 layers of rnn. regress on output directly.
 
+65. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 0.1 dropout.
+66. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 0.2 dropout.
 
+Decided to change to Visual Selective VIO dataset. 
+67. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] 0 dropout rmse is very low
+68. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] 0.1 dropout rmse is worse, but not that much
+69. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] 0.2 dropout rmse is worse, but not that much
 
+Repeated 70 training
+
+70. train_seq [00 01 02 04 08 09], val_seq [06], test_seq[05 07 10] 0 dropout
+71. train_seq [00 01 02 04 08 09], val_seq [06], test_seq[05 07 10] 0.1 dropout
+72. train_seq [00 01 02 04 08 09], val_seq [06], test_seq[05 07 10] 0.2 dropout
+
+73. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10], 0 dropout, best performing so far with around 7% error. 
+74. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10], 0.1 dropout
+75. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10], 0.2 dropout
+
+New IMU Structure
+76. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10], 0 dropout, try new imu structure and see if it improves training. Nope, it does not. Might need to revert to the Visual Selective VIO. 
+
+76. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] unfrozen encoder, 0.5 dropout, same config as other 
+77. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] unfrozen encoder, 0.7 dropout, same config as other
+
+------------------------------------------------------------------------------------------------------
 70. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10]. 48 batch size. 12*4 gradient accumulation. 4 layers rnn, 4 layers ode. regresson output directly.  Exploded in loss. 
 71. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10]. 48 batch size. 12*4 gradient accumulation. 4 layers rnn, 4 layers ode. regresson output directly, lower learning rate [5e-5, 5e-6, 5e-7]
 72. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10]. 48 batch size. Even lower lr [5e-5, 5e-6, 5e-7]
@@ -154,8 +177,38 @@ Test using multiple RNN layers. Maybe it is the bottleneck. Try it with regressi
 
 it seems that lower lr actually performed worse. Increase initial lr
 74. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10] 80 batch size, 20*4, 3 layers rnn, 2 layers ode [1e-3, 1e-4, 1e-5]
+------------------------------------------------------------------------------------------------------
 
 
-100. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] use dopri8 lr [5e-4 5e-5 5e-6], ode 3 layer
-101. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] use dopri8 lr [5e-4 5e-5 5e-6], ode 3 layer
-102. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] use dopri5 lr [5e-4 5e-5 5e-6], ode 5 layers
+100. train_seq [04 10], val_seq [04 10] use dopri5, relu, lr [1e-4, 1e-5, 1e-6] converges to around 0.5 loss at epoch 7
+101. train_seq [04 10], val_seq [04 10] dopri5, relu, lr [1e-3, 1e-4, 1e-5] converges at around 5 loss at epoch 7
+102. train_seq [04 10], val_seq [04 10] dopri5, leaky_relu, lr [1e-3, 1e-4, 1e-5]
+try relu, prediction fluctuates, around 5-10 loss
+103. train_seq [04 10], val_seq [04 10] dopri5, tanh, lr [1e-3, 1e-4, 1e-5]
+All performed similarly bad. Does not converge quickly. 
+104. train_seq [04 10], val_seq [04 10] dopri5, softplus and do not diff during output
+
+Ideas to try out:
+1. Increasing evaluation points by 10 times
+2. Lower tolerance for rel and abs
+3. Adjust CDE architecture (Diff lr for layers)
+4. Choices of Solvers
+5. Different Lr
+
+105. train_seq [04 10], val_seq [04 10] dopri5, softplus lr [1e-1, 1e-2, 1e-3] super huge loss and exploded. 
+This shows that a lower lr is better
+106. train_seq [04 10], val_seq [04 10] dopri5, softplus lr [1e-7, 1e-8, 1e-9] high loss at first and slowly converges. Indicate should increase learning rate. 
+107. train_seq [04 10], val_seq [04 10] dopri5, softplus lr [1e-6, 1e-7, 1e-8] still high loss at first and slowly converges. Indicate should increase learning rate. 
+108. train_seq [04 10], val_seq [04 10] dopri5, softplus lr [1e-5, 1e-6, 1e-7] converges quickly from 600 to around 100
+109. train_seq [04 10], val_seq [04 10] dopri5, softplus lr [5e-5, 5e-6, 5e-7] converges quickly from 600 to around 100
+
+Use different solvers. 
+110. train_seq [04 10], val_seq [04 10], midpoint solver
+111. train_seq [04 10], val_seq [04 10], implicit_adams
+112. train_seq [04 10], val_seq [04 10], explicit_adams
+113. train_seq [04 10], val_seq [04 10], euler
+114. train_seq [04 10], val_seq [04 10], rk4
+115. train_seq [04 10], val_seq [04 10], evaluate 100 times. rk4
+116. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10], evaluate 100 times. explicit_adams clip 0.5
+117. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10], evaluate 100 times. explicit_adams clip 0.5 
+118. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10], evaluate 100 times. clip 5, euler, no reduction

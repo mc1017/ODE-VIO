@@ -66,12 +66,12 @@ class PoseCDE(nn.Module):
     def forward(self, fv, fi, ts, prev=None, do_profile=False):
         # Fuse and reduce feature size
         fused_features = self.fuse(fv, fi)
-        fused_features = self.reduction_net(fused_features)
+        # fused_features = self.reduction_net(fused_features)
         batch_size, seq_len, _ = fused_features.shape
             
         # Subtract the first timestamp from all timestamps to get time differences
         # Remove the first timestamp and add a dimension
-        ts_diff = ts - ts[:, :1]  
+        ts_diff = ts - ts[:, :1] 
         ts_diff = ts_diff[:, 1:].unsqueeze(-1) 
         x = torch.cat([ts_diff, fused_features], dim=-1)
         
@@ -82,14 +82,17 @@ class PoseCDE(nn.Module):
         # Initialise initial state
         X0 = X.evaluate(X.interval[0])
         h_0 = self.initial(X0) if prev is None else prev
-        
-        # Evaluation timestamps
-        eval_times = torch.linspace(0.1, 1.0, 10, dtype=torch.float32).to(fused_features.device)
-        
-        # Integrate using the Neural CDE
+            
+        # Create a tensor from 0.01 to 1.0 with a step of 0.01
+        eval_times = torch.linspace(0.01, 1.0, 100, dtype=torch.float32).to(fused_features.device)
+
+        # Integrate using the Neural CDE with all evaluation timestamps
         kwargs = dict(adjoint_params=tuple(self.cde_func.parameters()) + (coeffs, ts_diff)) if self.adjoint else {}
-        h_T = cde.cdeint(X=X, func=self.cde_func, z0=h_0, t=eval_times, adjoint=self.adjoint, atol=1e-6, rtol=1e-4, method=self.solver, **kwargs)
-        
-        # Regress the relative poses
-        poses = self.regressor(h_T)
+        h_T = cde.cdeint(X=X, func=self.cde_func, z0=h_0, t=eval_times, adjoint=self.adjoint, atol=1e-7, rtol=1e-5, method=self.solver, **kwargs)
+
+        # Extract every 10th step from the result
+        h_T_extracted = h_T[:, ::10, :]
+
+        # Regress the relative poses using the extracted steps
+        poses = self.regressor(h_T_extracted)
         return poses, h_T[:, -1, :] # Return the last hidden state

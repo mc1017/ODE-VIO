@@ -79,7 +79,6 @@ class CDEFunc(nn.Module):
         return activation
 
     def forward(self, t, x):
-        # print("X shape", x.shape, "Feature shape", self.feature_dim)
         z = self.net(x)
         z = z.view(z.size(0), self.hidden_dim, self.feature_dim)
         return z

@@ -23,11 +23,14 @@ parser.add_argument( "--plot_dir", type=str, default="./results", help="path to 
 # Training Configurations
 parser.add_argument( "--experiment_name", type=str, default="experiment", help="experiment name")
 parser.add_argument( "--wandb", default=False, action="store_true", help="whether to use wandb logging")
+parser.add_argument( "--wandb_group", type=str, default="ode-rnn", help="group of the wandb run")
+parser.add_argument( "--sweep", default=False, action="store_true", help="whether to use wandb sweep")
 parser.add_argument( "--resume", type=str, default=None, help="resume training (wandb run id)")
 parser.add_argument( "--pretrain_flownet", type=str, default="./pretrained_models/flownets_bn_EPE2.459.pth.tar", help="wehther to use the pre-trained flownet",)
 parser.add_argument( "--pretrain", type=str, default=None, help="path to the pretrained model")
-parser.add_argument( "--train_seq", type=str, default=["04", "10"], nargs="+", help="sequences for training",)
-parser.add_argument( "--val_seq", type=str, default=["04", "10"], nargs="+", help="sequences for validation",)
+parser.add_argument( "--train_seq", type=str, default=["00", "01", "02", "04", "08", "09"], nargs="+", help="sequences for training",)
+parser.add_argument( "--val_seq", type=str, default=["06"], nargs="+", help="sequences for validation",)
+parser.add_argument( "--test_seq", type=str, default=["05", "07", "10"], nargs="+", help="sequences for validation",)
 parser.add_argument("--seed", type=int, default=0, help="random seed")
 parser.add_argument("--workers", type=int, default=8, help="number of workers in dataloader")
 parser.add_argument( "--print_frequency", type=int, default=10, help="print frequency for loss values")
@@ -265,17 +268,36 @@ def main():
         best, t_rel, r_rel, t_rmse, r_rmse  = evaluate(model, tester, ep, best)
         if args.wandb:
             wandb.log({"t_rel": t_rel, "r_rel": r_rel, "t_rmse": t_rmse, "r_rmse": r_rmse, "best_t_rel": best, "avg_pose_loss": avg_pose_loss})
+        
+        # Early stopping
+        if ep == 5 and avg_pose_loss > 0.1 or ep == 10 and avg_pose_loss > 0.01:
+            return
+        
     message = f"Training finished, best t_rel: {best:.4f}"
     logger.info(message)
 
 
+sweep_configuration = {
+    "name": "sweepdemo",
+    "method": "random",
+    "metric": {"goal": "minimize", "name": "avg_pose_loss"},
+    "parameters": {
+        "lr_warmup": {"min": 1e-7, "max": 1e-3},
+        "batch_size": {"values": [16, 26]},
+        "epochs": {"values": [5, 10, 15]},
+        "optimizer": {"values": ["adam", "sgd"]},
+    },
+}
+
 if __name__ == "__main__":
     if args.wandb:
         id, resume = (args.resume, "must") if args.resume else (wandb.util.generate_id(), "allow")
+        group = args.wandb_group
         logger.info(f"Wandb Run ID: {id}")
         wandb.init(
             # set the wandb project where this run will be logged
             project="Final Year Project",
+            group=group,
             id=id, 
             resume=resume,
             name=args.experiment_name,
@@ -283,3 +305,5 @@ if __name__ == "__main__":
             config=args,
         )
     main()
+   
+    

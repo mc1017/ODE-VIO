@@ -41,13 +41,16 @@ class DeepVIO(nn.Module):
     
     def _set_pose_model(self, opt):
         if opt.model_type == "rnn":
+            print("Using PoseRNN")
             return PoseRNN(opt)
         elif opt.model_type == "ode-rnn":
+            print("Using PoseODERNN")
             return PoseODERNN(opt)
         elif opt.model_type == "cde":
+            print("Using PoseCDE")
             return PoseCDE(opt)
         elif opt.model_type == "ltc":
-            return PoseNCP(opt)
+            raise NotImplementedError("LTC model not implemented yet")
         
     def forward( self, img, imu, timestamps, hc=None):
         
