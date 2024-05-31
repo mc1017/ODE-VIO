@@ -28,11 +28,15 @@ def load_pretrained_model(model, args):
 
 
 def get_optimizer(model, args):
+    param_groups = [
+        {'params': model.module.Pose_net.get_other_params(), 'lr': args.lr_warmup},
+        {'params': model.module.Pose_net.get_regressor_params(), 'lr': args.lr_warmup}
+    ]
     if args.optimizer == "SGD":
-        optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
+        optimizer = torch.optim.SGD(param_groups, lr=1e-4, momentum=0.9)
     elif args.optimizer == "Adam":
         optimizer = torch.optim.Adam(
-            model.parameters(),
+            param_groups,
             lr=args.lr_warmup,
             betas=(0.9, 0.999),
             eps=1e-08,

@@ -57,7 +57,7 @@ parser.add_argument( "--fuse_method", type=str, default="cat", help="fusion meth
 
 # ODE Parameters
 parser.add_argument( "--ode_hidden_dim", type=int, default=512, help="size of the ODE latent")
-parser.add_argument( "--ode_num_layers", type=int, default=3, help="number of layers for the ODE")
+parser.add_argument( "--ode_fn_num_layers", type=int, default=3, help="number of layers for the ODE function")
 parser.add_argument( "--ode_activation_fn", type=str, default="tanh", help="activation function [softplus, relu, leaky_relu, tanh]",)
 parser.add_argument( "--ode_solver", type=str, default="dopri5", help="ODE solvers [dopri5, heun, euler, runge_kutta, tsit5]",)
 
@@ -69,6 +69,7 @@ parser.add_argument( "--rnn_dropout_out", type=float, default=0, help="dropout f
 
 # CDE Parameters 
 parser.add_argument( "--cde_hidden_dim", type=int, default=128, help="size of the CDE latent")
+parser.add_argument( "--cde_fn_num_layers", type=int, default=3, help="number of layers for the CDE Function")
 parser.add_argument( "--cde_num_layers", type=int, default=3, help="number of layers for the cDE")
 parser.add_argument( "--cde_activation_fn", type=str, default="tanh", help="activation function [softplus, relu, leaky_relu, tanh]",)
 parser.add_argument( "--cde_solver", type=str, default="dopri5", help="ODE solvers [dopri5, heun, euler, runge_kutta, tsit5]",)

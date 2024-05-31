@@ -48,7 +48,7 @@ class PoseODERNN(nn.Module):
         self.ode_func = ODEFunc(
             feature_dim=self.f_len,
             hidden_dim=opt.ode_hidden_dim,
-            num_hidden_layers=opt.ode_num_layers,
+            num_hidden_layers=opt.ode_fn_num_layers,
             activation=opt.ode_activation_fn,
         )
         term = to.ODETerm(self.ode_func)
@@ -133,3 +133,9 @@ class PoseODERNN(nn.Module):
             raise ValueError(f"RNN type {rnn_type} not supported")
         print("RNN Type:", rnn)
         return rnn
+    
+    def get_regressor_params(self):
+        return self.regressor.parameters()
+    
+    def get_other_params(self):
+        return [param for name, param in self.named_parameters() if not name.startswith('regressor')]

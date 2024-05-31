@@ -169,6 +169,9 @@ New IMU Structure
 76. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] unfrozen encoder, 0.5 dropout, same config as other 
 77. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] unfrozen encoder, 0.7 dropout, same config as other
 
+Reverted IMU
+79. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] 0.0 dropout. 100x lr for regressor. 
+
 ------------------------------------------------------------------------------------------------------
 70. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10]. 48 batch size. 12*4 gradient accumulation. 4 layers rnn, 4 layers ode. regresson output directly.  Exploded in loss. 
 71. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10]. 48 batch size. 12*4 gradient accumulation. 4 layers rnn, 4 layers ode. regresson output directly, lower learning rate [5e-5, 5e-6, 5e-7]
@@ -212,3 +215,20 @@ Use different solvers.
 116. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10], evaluate 100 times. explicit_adams clip 0.5
 117. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10], evaluate 100 times. explicit_adams clip 0.5 
 118. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10], evaluate 100 times. clip 5, euler, no reduction
+
+Implemented two things. 1. Stacked Neural CDE. 2. Regression layer 30xlr
+
+119. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] So far fastest to convergence. 
+
+Try 100x lr for regression layer. 
+120. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] So far fastest to convergence. Still shitty initial loss. 
+
+Try removing the initial layer but initialise as 0. Correctly concatenating multiple layers of hidden states. 
+*** Break through ***
+121. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] Very low initial loss, super promising. lr [1e-4, 1e-5, 1e-6], only thing is that the loss does not seem to converge too quickly. Maybe reduce learning rate?
+121. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] lr [1e-5, 1e-6, 1e-7]
+Turns out the loss converges at a very high point. Bad Predictions. 
+
+Changed back the architecture into using linear and the first interpolation point with initial linear layer.
+Also reverted back to consistent lr. 
+123. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10]. The initial loss performs poorly. It shows that the initial state has a large effect on the initial performance. 

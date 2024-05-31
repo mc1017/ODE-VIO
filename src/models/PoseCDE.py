@@ -46,19 +46,22 @@ class PoseCDE(nn.Module):
         self.f_len = opt.v_f_len + opt.i_f_len
         self.input_dim = opt.cde_hidden_dim + 1 # reduced feature size + time
         self.cde_hidden_dim = opt.cde_hidden_dim
+        self.cde_num_layers = opt.cde_num_layers
+        self.cde_fn_num_layers = opt.cde_fn_num_layers
       
         self.fuse = FusionModule(self.f_len ,opt.fuse_method)
         self.reduction_net = nn.Linear(self.f_len, opt.cde_hidden_dim)
-        self.initial = torch.nn.Linear(opt.cde_hidden_dim+1, opt.cde_hidden_dim)
+        self.initial = nn.Linear(opt.cde_hidden_dim+1, opt.cde_hidden_dim)
         self.cde_func = CDEFunc(feature_dim=self.input_dim, 
             hidden_dim=opt.cde_hidden_dim,
-            num_hidden_layers=opt.cde_num_layers,
+            num_hidden_layers=opt.cde_fn_num_layers,
             activation=opt.cde_activation_fn,
         )
         self.regressor = nn.Sequential(
             nn.Linear(self.cde_hidden_dim, 128),
             nn.LeakyReLU(0.1, inplace=True),
             nn.Linear(128, 6),
+
         )
         self.solver = opt.cde_solver
        
@@ -68,31 +71,41 @@ class PoseCDE(nn.Module):
         fused_features = self.fuse(fv, fi)
         # fused_features = self.reduction_net(fused_features)
         batch_size, seq_len, _ = fused_features.shape
+        # print("max, min, mean, median, std:", fused_features.max().item(), fused_features.min().item(), fused_features.mean().item(), fused_features.median().item(), fused_features.std().item())
             
         # Subtract the first timestamp from all timestamps to get time differences
         # Remove the first timestamp and add a dimension
         ts_diff = ts - ts[:, :1] 
         ts_diff = ts_diff[:, 1:].unsqueeze(-1) 
-        x = torch.cat([ts_diff, fused_features], dim=-1)
         
-        # Interpolate features to create a continuous path
-        coeffs = cde.linear_interpolation_coeffs(x, rectilinear=0)
-        X = cde.LinearInterpolation(coeffs)
-        
-        # Initialise initial state
-        X0 = X.evaluate(X.interval[0])
-        h_0 = self.initial(X0) if prev is None else prev
+        h_T = []
+        h_0 = torch.zeros(self.cde_num_layers, batch_size, self.cde_hidden_dim, device=fused_features.device) if prev is None else prev
+        for i in range(self.cde_num_layers): 
+            x = torch.cat([ts_diff, fused_features], dim=-1)
+            coeffs = cde.linear_interpolation_coeffs(x, rectilinear=0)
+            X = cde.LinearInterpolation(coeffs)
+            # X0 = X.evaluate(X.interval[0])
             
-        # Create a tensor from 0.01 to 1.0 with a step of 0.01
-        eval_times = torch.linspace(0.01, 1.0, 100, dtype=torch.float32).to(fused_features.device)
+            # Create a tensor from 0.01 to 1.0 with a step of 0.01
+            eval_times = torch.linspace(0.1, 1.0, 10, dtype=torch.float32).to(fused_features.device)
 
-        # Integrate using the Neural CDE with all evaluation timestamps
-        kwargs = dict(adjoint_params=tuple(self.cde_func.parameters()) + (coeffs, ts_diff)) if self.adjoint else {}
-        h_T = cde.cdeint(X=X, func=self.cde_func, z0=h_0, t=eval_times, adjoint=self.adjoint, atol=1e-7, rtol=1e-5, method=self.solver, **kwargs)
-
-        # Extract every 10th step from the result
-        h_T_extracted = h_T[:, ::10, :]
+            # Integrate using the Neural CDE with all evaluation timestamps
+            kwargs = dict(adjoint_params=tuple(self.cde_func.parameters()) + (coeffs, ts_diff)) if self.adjoint else {}
+            h_i = cde.cdeint(X=X, func=self.cde_func, z0=h_0[i], t=eval_times, adjoint=self.adjoint, atol=1e-6, rtol=1e-4, method=self.solver, **kwargs)
+            fused_features = h_i
+            h_T.append(h_i[:, -1, :])
 
         # Regress the relative poses using the extracted steps
-        poses = self.regressor(h_T_extracted)
-        return poses, h_T[:, -1, :] # Return the last hidden state
+        # print(h_i.shape,h_0.shape,  torch.diff(h_i, dim=1).shape)?
+        h_diff = torch.cat([(h_i[:,0,:]-h_0[0]).unsqueeze(1), torch.diff(h_i, dim=1)], dim=1)
+        
+        # print("h_diff shape:", h_diff.shape)
+        poses = self.regressor(h_diff)
+        h_T = torch.stack(h_T, dim=0)
+        return poses, h_T # Return the last hidden state
+    
+    def get_regressor_params(self):
+        return self.regressor.parameters()
+    
+    def get_other_params(self):
+        return [param for name, param in self.named_parameters() if not name.startswith('regressor')]
