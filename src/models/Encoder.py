@@ -57,7 +57,7 @@ class InertialEncoder(nn.Module):
         self.proj = nn.Linear(256 * 1 * 11, opt.i_f_len)
 
     def forward(self, x):
-        num_pairs = (x.shape[1]-1) // (self.seq_len-1)
+        num_pairs = (x.shape[1]-1) // 10
         x = torch.cat(
             [x[:, i * 10 : i * 10 + 11, :].unsqueeze(1) for i in range(num_pairs)],
             dim=1,

@@ -51,7 +51,10 @@ class PoseCDE(nn.Module):
       
         self.fuse = FusionModule(self.f_len ,opt.fuse_method)
         self.reduction_net = nn.Linear(self.f_len, opt.cde_hidden_dim)
-        self.initial = nn.Linear(opt.cde_hidden_dim+1, opt.cde_hidden_dim)
+        self.initial = nn.Sequential(
+            nn.Linear(opt.cde_hidden_dim + 1, opt.cde_hidden_dim),
+            nn.Tanh()
+        )
         self.cde_func = CDEFunc(feature_dim=self.input_dim, 
             hidden_dim=opt.cde_hidden_dim,
             num_hidden_layers=opt.cde_fn_num_layers,
@@ -64,6 +67,7 @@ class PoseCDE(nn.Module):
 
         )
         self.solver = opt.cde_solver
+        
        
     
     def forward(self, fv, fi, ts, prev=None, do_profile=False):
@@ -73,34 +77,33 @@ class PoseCDE(nn.Module):
         batch_size, seq_len, _ = fused_features.shape
         # print("max, min, mean, median, std:", fused_features.max().item(), fused_features.min().item(), fused_features.mean().item(), fused_features.median().item(), fused_features.std().item())
             
-        # Subtract the first timestamp from all timestamps to get time differences
-        # Remove the first timestamp and add a dimension
-        ts_diff = ts - ts[:, :1] 
-        ts_diff = ts_diff[:, 1:].unsqueeze(-1) 
+        ts_diff = ts - ts[:, :1] # Time difference between frames
+        # ts_diff = ts_diff - ts_diff[:, 1:2] # Start at 0
+        ts_diff = ts_diff[:, 1:].unsqueeze(-1) # Remove first element
+        # print(ts_diff)
+        
         
         h_T = []
-        h_0 = torch.zeros(self.cde_num_layers, batch_size, self.cde_hidden_dim, device=fused_features.device) if prev is None else prev
+         
         for i in range(self.cde_num_layers): 
             x = torch.cat([ts_diff, fused_features], dim=-1)
             coeffs = cde.linear_interpolation_coeffs(x, rectilinear=0)
             X = cde.LinearInterpolation(coeffs)
-            # X0 = X.evaluate(X.interval[0])
+            X0 = X.evaluate(X.interval[0])
+            h_0 = self.initial(X0) if prev is None else prev[i]
             
-            # Create a tensor from 0.01 to 1.0 with a step of 0.01
-            eval_times = torch.linspace(0.1, 1.0, 10, dtype=torch.float32).to(fused_features.device)
+            
+            eval_times = torch.linspace(0.1, (seq_len)*0.1, seq_len, dtype=torch.float32).to(fused_features.device)
+            # print(eval_times)
 
             # Integrate using the Neural CDE with all evaluation timestamps
             kwargs = dict(adjoint_params=tuple(self.cde_func.parameters()) + (coeffs, ts_diff)) if self.adjoint else {}
-            h_i = cde.cdeint(X=X, func=self.cde_func, z0=h_0[i], t=eval_times, adjoint=self.adjoint, atol=1e-6, rtol=1e-4, method=self.solver, **kwargs)
+            h_i = cde.cdeint(X=X, func=self.cde_func, z0=h_0, t=eval_times, adjoint=self.adjoint, atol=1e-6, rtol=1e-4, method=self.solver, **kwargs)
             fused_features = h_i
             h_T.append(h_i[:, -1, :])
-
-        # Regress the relative poses using the extracted steps
-        # print(h_i.shape,h_0.shape,  torch.diff(h_i, dim=1).shape)?
-        h_diff = torch.cat([(h_i[:,0,:]-h_0[0]).unsqueeze(1), torch.diff(h_i, dim=1)], dim=1)
         
         # print("h_diff shape:", h_diff.shape)
-        poses = self.regressor(h_diff)
+        poses = self.regressor(h_i)
         h_T = torch.stack(h_T, dim=0)
         return poses, h_T # Return the last hidden state
     

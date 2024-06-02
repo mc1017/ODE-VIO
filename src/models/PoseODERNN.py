@@ -100,7 +100,7 @@ class PoseODERNN(nn.Module):
             output_i, rnn_h = self.rnn(fused_features[:, i : i + 1, :], ode_hidden_states)
             output.append(output_i)
             h_0 = rnn_h
-        output = torch.cat(output, dim=1) 
+        output = torch.cat(output, dim=1)
         
         if do_profile:
             torch.cuda.nvtx.range_pop()
