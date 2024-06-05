@@ -10,6 +10,7 @@ from utils.params import set_gpu_ids, load_pretrained_model, get_optimizer
 from utils.utils import setup_experiment_directories, setup_training_logger, setup_debug_logger, print_tensor_stats
 from scripts.transforms import get_transforms
 from pathlib import Path
+import os
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -136,19 +137,24 @@ def main():
 
 if __name__ == "__main__":
     results = main()
-    
-    for seq in args.val_seq:
-        t_rel_mean = np.mean(results[seq]['t_rel'])
-        t_rel_std = np.std(results[seq]['t_rel'])
-        r_rel_mean = np.mean(results[seq]['r_rel'])
-        r_rel_std = np.std(results[seq]['r_rel'])
-        t_rmse_mean = np.mean(results[seq]['t_rmse'])
-        t_rmse_std = np.std(results[seq]['t_rmse'])
-        r_rmse_mean = np.mean(results[seq]['r_rmse'])
-        r_rmse_std = np.std(results[seq]['r_rmse'])
+    test_dir = setup_test_directory()
+    output_file_path = os.path.join(test_dir, "summary.txt")
+    with open(output_file_path, 'w') as f:
+        for seq in args.val_seq:
+            t_rel_mean = np.mean(results[seq]['t_rel'])
+            t_rel_std = np.std(results[seq]['t_rel'])
+            r_rel_mean = np.mean(results[seq]['r_rel'])
+            r_rel_std = np.std(results[seq]['r_rel'])
+            t_rmse_mean = np.mean(results[seq]['t_rmse'])
+            t_rmse_std = np.std(results[seq]['t_rmse'])
+            r_rmse_mean = np.mean(results[seq]['r_rmse'])
+            r_rmse_std = np.std(results[seq]['r_rmse'])
+            
+            summary_message = (f"Seq: {seq}, t_rel_mean: {t_rel_mean:.4f} (std: {t_rel_std:.4f}), "
+                            f"r_rel_mean: {r_rel_mean:.4f} (std: {r_rel_std:.4f}), "
+                            f"t_rmse_mean: {t_rmse_mean:.4f} (std: {t_rmse_std:.4f}), "
+                            f"r_rmse_mean: {r_rmse_mean:.4f} (std: {r_rmse_std:.4f}), ")
+            
+            print(summary_message)
+            f.write(summary_message + '\n')
         
-        summary_message = (f"Seq: {seq}, t_rel_mean: {t_rel_mean:.4f} (std: {t_rel_std:.4f}), "
-                        f"r_rel_mean: {r_rel_mean:.4f} (std: {r_rel_std:.4f}), "
-                        f"t_rmse_mean: {t_rmse_mean:.4f} (std: {t_rmse_std:.4f}), "
-                        f"r_rmse_mean: {r_rmse_mean:.4f} (std: {r_rmse_std:.4f}), ")
-        print(summary_message)
