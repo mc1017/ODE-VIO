@@ -6,7 +6,6 @@ import wandb
 from src.data.KITTI_dataset import KITTI, SequenceBoundarySampler
 from src.data.KITTI_eval import KITTI_tester
 from src.models.DeepVIO import DeepVIO
-from src.models.DeepVIO_CDE import DeepVIO_CDE
 from utils.params import set_gpu_ids, load_pretrained_model, get_optimizer
 from utils.utils import setup_experiment_directories, setup_training_logger, setup_debug_logger, print_tensor_stats
 from scripts.transforms import get_transforms
@@ -14,11 +13,12 @@ from pathlib import Path
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument( "--data_dir", type=str, default="/vol/bitbucket/mc620/KITTI/data", help="path to the dataset",)
-parser.add_argument( "--checkpoint_dir", type=str, default="/vol/bitbucket/mc620/NeuralCDE-VIO", help="path to the checkpoints",)
+parser.add_argument( "--data_dir", type=str, default="/mnt/data0/marco/KITTI/data", help="path to the dataset",)
+parser.add_argument( "--checkpoint_dir", type=str, default="/mnt/data0/marco/NeuralCDE-VIO", help="path to the checkpoints",)
 parser.add_argument( "--gpu_ids", type=str, default="0", help="gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU",)
 parser.add_argument( "--save_dir", type=str, default="./results", help="path to save the result")
 parser.add_argument( "--plot_dir", type=str, default="./results", help="path to save the log")
+parser.add_argument( "--run_times", type=int, default=1, help="number of times to run the experiment")
 
 # Training Configurations
 parser.add_argument( "--experiment_name", type=str, default="experiment", help="experiment name")
@@ -99,31 +99,56 @@ def main():
     # GPU selections
     gpu_id = set_gpu_ids(args)
     
-    # Initialize the tester
-    tester = KITTI_tester(args)
+    # Initialize a dictionary to store errors for each sequence
+    results = {seq: {'t_rel': [], 'r_rel': [], 't_rmse': [], 'r_rmse': [], 'usage': []} for seq in args.val_seq} 
+    print(args.run_times)
+    
+    for j in range(args.run_times):
+        # Initialize the tester
+        tester = KITTI_tester(args)
 
-    # Model initialization
-    model = DeepVIO(args)
+        # Model initialization
+        model = DeepVIO(args)
 
-    model.load_state_dict(torch.load(args.pretrain))
-    print('load model %s'%args.pretrain)
-    print('Dropout percentage:', args.eval_data_dropout)
+        model.load_state_dict(torch.load(args.pretrain))
+        print('load model %s'%args.pretrain)
+        print('Dropout percentage:', args.eval_data_dropout)
+            
+        # Feed model to GPU
+        model.cuda(gpu_id)
+        model.eval()
+
+        errors = tester.eval(model, num_gpu=1)
+        tester.generate_plots(test_dir, 30)
+        tester.save_text(test_dir)
         
-    # Feed model to GPU
-    model.cuda(gpu_id)
-    model.eval()
-
-    errors = tester.eval(model, num_gpu=1)
-    tester.generate_plots(test_dir, 30)
-    tester.save_text(test_dir)
-    
-    for i, seq in enumerate(args.val_seq):
-        message = f"Seq: {seq}, t_rel: {tester.errors[i]['t_rel']:.4f}, r_rel: {tester.errors[i]['r_rel']:.4f}, "
-        message += f"t_rmse: {tester.errors[i]['t_rmse']:.4f}, r_rmse: {tester.errors[i]['r_rmse']:.4f}, "
-        message += f"usage: {tester.errors[i]['usage']:.4f}"
-        print(message)
-    
-    
+        for i, seq in enumerate(args.val_seq):
+            # Collect errors for each sequence
+            results[seq]['t_rel'].append(tester.errors[i]['t_rel'])
+            results[seq]['r_rel'].append(tester.errors[i]['r_rel'])
+            results[seq]['t_rmse'].append(tester.errors[i]['t_rmse'])
+            results[seq]['r_rmse'].append(tester.errors[i]['r_rmse'])
+            message = f"Seq: {seq}, t_rel: {tester.errors[i]['t_rel']:.4f}, r_rel: {tester.errors[i]['r_rel']:.4f}, "
+            message += f"t_rmse: {tester.errors[i]['t_rmse']:.4f}, r_rmse: {tester.errors[i]['r_rmse']:.4f}, "
+            print(message)
+    return results
+            
 
 if __name__ == "__main__":
-    main()
+    results = main()
+    
+    for seq in args.val_seq:
+        t_rel_mean = np.mean(results[seq]['t_rel'])
+        t_rel_std = np.std(results[seq]['t_rel'])
+        r_rel_mean = np.mean(results[seq]['r_rel'])
+        r_rel_std = np.std(results[seq]['r_rel'])
+        t_rmse_mean = np.mean(results[seq]['t_rmse'])
+        t_rmse_std = np.std(results[seq]['t_rmse'])
+        r_rmse_mean = np.mean(results[seq]['r_rmse'])
+        r_rmse_std = np.std(results[seq]['r_rmse'])
+        
+        summary_message = (f"Seq: {seq}, t_rel_mean: {t_rel_mean:.4f} (std: {t_rel_std:.4f}), "
+                        f"r_rel_mean: {r_rel_mean:.4f} (std: {r_rel_std:.4f}), "
+                        f"t_rmse_mean: {t_rmse_mean:.4f} (std: {t_rmse_std:.4f}), "
+                        f"r_rmse_mean: {r_rmse_mean:.4f} (std: {r_rmse_std:.4f}), ")
+        print(summary_message)
