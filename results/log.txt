@@ -237,7 +237,20 @@ Difference in initial state and start with 0
 125. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10], smooth circles. Not what I am looking for
 126. changed to dopri5 solver
 
-
-
 132. removed outermost tanh layer
 134. Longer seq_len
+
+During evaluation, we append the new observation to history for interpolation. We do not change the inital hidden state. 
+135. After the chage, the evaluation although converges slowly, is much more natural. It slowly uncurls and form certain shape akin to the resulting trajectory. Actually pretty good
+
+136. lowered lr [5e-5, 5e-6, 5e-7] and clip norm at 1
+
+137. add 2 layer cde for trainin log to wandb
+
+Try log-signature for Neural RDE
+138. seq_len = 11, still does not perform well.
+
+139. seq_len = 21
+
+How about evaluating the data points one by one? 
+

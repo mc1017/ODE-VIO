@@ -1,12 +1,12 @@
 # ODE-RNN
 python3 -m scripts.test_model \
-  --experiment_name="72 - 0 Drop, separate test" \
-  --test_name="10%_dropout" \
-  --gpu_ids=0 \
+  --experiment_name="74_01drop_vsdataset" \
+  --test_name="70%_dropout" \
+  --gpu_ids=2 \
   --batch_size=26 \
   --grad_accumulation_steps=1 \
   --ode_activation_fn=softplus \
-  --ode_num_layers=2 \
+  --ode_fn_num_layers=2 \
   --rnn_num_layers=3 \
   --ode_hidden_dim=1024 \
   --workers=8 \
@@ -14,5 +14,6 @@ python3 -m scripts.test_model \
   --ode_rnn_type=rnn \
   --fuse_method=soft \
   --freeze_encoder \
-  --eval_data_dropout=0.2 \
-  --pretrain="/vol/bitbucket/mc620/NeuralCDE-VIO/72 - 0 Drop, separate test/checkpoints/058.pth" \
+  --eval_data_dropout=0.7 \
+  --pretrain="/mnt/data0/marco/NeuralCDE-VIO/74_01drop_vsdataset/checkpoints/098.pth" \
+  --run_times=10 \

@@ -5,6 +5,7 @@ from src.models.PoseODERNN import PoseODERNN
 from src.models.PoseRNN import PoseRNN
 from src.models.PoseNCP import PoseNCP
 from src.models.PoseCDE import PoseCDE
+from src.models.PoseRDE import PoseRDE
 
 class DeepVIO(nn.Module):
     """
@@ -49,6 +50,9 @@ class DeepVIO(nn.Module):
         elif opt.model_type == "cde":
             print("Using PoseCDE")
             return PoseCDE(opt)
+        elif opt.model_type == "rde":
+            print("Using PoseRDE")
+            return PoseRDE(opt)
         elif opt.model_type == "ltc":
             raise NotImplementedError("LTC model not implemented yet")
         
