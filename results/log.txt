@@ -172,6 +172,9 @@ New IMU Structure
 Reverted IMU
 79. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] 0.0 dropout. 100x lr for regressor. 
 
+
+81. Tried mixed training with various levels of dropouts
+
 ------------------------------------------------------------------------------------------------------
 70. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10]. 48 batch size. 12*4 gradient accumulation. 4 layers rnn, 4 layers ode. regresson output directly.  Exploded in loss. 
 71. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10]. 48 batch size. 12*4 gradient accumulation. 4 layers rnn, 4 layers ode. regresson output directly, lower learning rate [5e-5, 5e-6, 5e-7]
@@ -242,15 +245,33 @@ Difference in initial state and start with 0
 
 During evaluation, we append the new observation to history for interpolation. We do not change the inital hidden state. 
 135. After the chage, the evaluation although converges slowly, is much more natural. It slowly uncurls and form certain shape akin to the resulting trajectory. Actually pretty good
-
 136. lowered lr [5e-5, 5e-6, 5e-7] and clip norm at 1
-
 137. add 2 layer cde for trainin log to wandb
 
 Try log-signature for Neural RDE
 138. seq_len = 11, still does not perform well.
-
-139. seq_len = 21
+139. seq_len = 21, still bad, does not converge to a low loss. 
 
 How about evaluating the data points one by one? 
+140. It works ok at 66% error, 0.01 loss. 
 
+141. Try to regress from the previous hidden state one by one like in ODE rnn. One thing to note is that the timestamp feed into it is [0, 1.1], [1.1, 2.3], so cumulative increase within a sequence. Interested to see if it improves or should timestamps always start from 0 since we take the last hidden state as initial. 
+
+
+
+
+142. Decreased tolerance and adjusted evaluation to always start from the previous frame's hiddens state. 
+
+143. Changed back to passing on the same initial state. Fixed timestamp
+144. Fixed timestep and try passing on the last hidden state. Does not work at all 600 t_rel
+
+Can try to pass on the difference between the two time.
+
+145. Still does not work at all. Using previous state to regress is a bad idea. Retreat back to using the first state. 
+
+146. Try to regress from the start of sequence by resetting z_0 to the start of new seqeunce.
+
+
+
+====================================================
+Final Models

@@ -67,7 +67,6 @@ class PoseCDE(nn.Module):
 
         )
         self.solver = opt.cde_solver
-        self.history = {'features': None, 'timestamps': None}
        
     
     def forward(self, fv, fi, ts, prev=None, do_profile=False):
@@ -76,45 +75,26 @@ class PoseCDE(nn.Module):
         batch_size, seq_len, _ = fused_features.shape
         
         ts_diff = ts - ts[:, :1] # Time difference from the first timestamp
-        ts_diff = ts_diff[:, 1:].unsqueeze(-1) # Remove first element
-        ts = ts[:, 1:].unsqueeze(-1) # Remove first element
+        
+        ts =  ts_diff.unsqueeze(-1) if self.training else ts.unsqueeze(-1)
         # Check if in training or evaluation mode
-        if not self.training:
-            # In evaluation mode, accumulate history
-            if prev is None:
-                self.history['features'] = fused_features
-                self.history['timestamps'] = ts
-            else:
-                self.history['features'] = torch.cat([self.history['features'], fused_features], dim=1)
-                self.history['timestamps'] = torch.cat([self.history['timestamps'], ts], dim=1)
-        else:
-            # In training mode, reset history for each new sequence
-            self.history['features'] = fused_features
-            self.history['timestamps'] = ts_diff
-            self.h_0 = None
 
-        path_fused_features = self.history['features']
-        path_ts = self.history['timestamps']
-    
-        h_0, h_T = [], []
-        for i in range(self.cde_num_layers): 
-            x = torch.cat([path_ts, path_fused_features], dim=-1)
-            coeffs = cde.linear_interpolation_coeffs(x, rectilinear=0)
-            X = cde.LinearInterpolation(coeffs)
-            z_0 = self.initial(X.evaluate(X.interval[0])) if prev is None else prev[i]
-            h_0.append(z_0)
-               
-            eval_times = ts_diff[0].squeeze(1) if self.training else ts[0].squeeze(1)
+        x = torch.cat([ts[:, 1:], fused_features], dim=-1)
+        coeffs = cde.linear_interpolation_coeffs(x, rectilinear=0)
+        X = cde.LinearInterpolation(coeffs)
+        z_0 = self.initial(X.evaluate(X.interval[0]))
+        #  if prev is None else prev
+        h_T = []
+        for i in range(seq_len):
+            eval_times = ts[0, i:i+2].squeeze(1)
             # Integrate using the Neural CDE with all evaluation timestamps
             # kwargs = dict(adjoint_params=tuple(self.cde_func.parameters()) + (coeffs, eval_times)) if self.adjoint else {}
             h_i = cde.cdeint(X=X, func=self.cde_func, z0=z_0, t=eval_times, adjoint=self.adjoint, atol=1e-6, rtol=1e-4, method=self.solver)
-            path_fused_features = h_i
             h_T.append(h_i[:, -1, :])
-        
+        h_T = torch.stack(h_T, dim=1)
         # print("h_diff shape:", h_diff.shape)
-        poses = self.regressor(h_i)
-        h_0 = torch.stack(h_0, dim=0)
-        return poses, h_0 # Return the last hidden state
+        poses = self.regressor(h_T)
+        return poses, z_0 # Return the last hidden state
     
     def get_regressor_params(self):
         return self.regressor.parameters()

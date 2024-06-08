@@ -26,6 +26,7 @@ debug_logger = setup_debug_logger(args, log_dir)
 
 def update_status(ep, args, model):
     if ep < args.epochs_warmup:  # Warmup stage
+        # lr = get_warmup_lr(ep, args.epochs_warmup, args.lr_warmup, args.lr_joint)
         lr = args.lr_warmup
     elif (
         ep >= args.epochs_warmup and ep < args.epochs_warmup + args.epochs_joint
@@ -33,6 +34,13 @@ def update_status(ep, args, model):
         lr = args.lr_joint
     elif ep >= args.epochs_warmup + args.epochs_joint:  # Finetuning stage
         lr = args.lr_fine
+    return lr
+
+def get_warmup_lr(epoch, warmup_epochs, base_lr, warmup_lr):
+    if epoch < warmup_epochs:
+        lr = warmup_lr + (base_lr - warmup_lr) * (epoch / warmup_epochs)
+    else:
+        lr = base_lr
     return lr
 
 def train(model, optimizer, train_loader, logger, ep):
@@ -117,10 +125,12 @@ def evaluate(model, tester, ep, best):
     return best, t_rel, r_rel, t_rmse, r_rmse
 
 
-def main():
+def get_train_loader(args):
     # Get the data transforms
     transform_train = get_transforms(args)
-
+    dropout_ratio = np.random.normal(args.data_dropout, args.data_dropout_std) 
+    logger.info("Dropout ratio: {}".format(dropout_ratio))
+    
     # Load the dataset
     train_dataset = KITTI(
         args.data_dir,
@@ -128,10 +138,9 @@ def main():
         train_seqs=args.train_seq,
         transform=transform_train,
         logger=debug_logger,
-        dropout=args.data_dropout,
+        # Get a random dropout level
+        dropout=dropout_ratio,
     )
-
-    # Using batch sampler here to preserve the sequence boundaries, preventing non-ascending timestamps
     batch_sampler = SequenceBoundarySampler(
         args.data_dir,
         batch_size=args.batch_size,
@@ -146,6 +155,10 @@ def main():
         pin_memory=True,
         batch_sampler=batch_sampler,
     )
+    return train_loader
+
+
+def main():
     gpu_id = set_gpu_ids(args)
 
     # Model initialization
@@ -187,6 +200,8 @@ def main():
     for ep in range(
         init_epoch, args.epochs_warmup + args.epochs_joint + args.epochs_fine
     ):
+        train_loader = get_train_loader(args)
+        
         lr = update_status(ep, args, model)
         # Create parameter groups
         optimizer.param_groups[0]["lr"] = lr
