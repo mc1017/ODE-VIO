@@ -172,8 +172,11 @@ New IMU Structure
 Reverted IMU
 79. train_seq [00 01 02 04 06 08 09], val_seq [05 07 10] 0.0 dropout. 100x lr for regressor. 
 
+81 gru does not work well. Loss decreased and increased.
 
-81. Tried mixed training with various levels of dropouts
+83. Tried mixed training with various levels of dropouts
+
+
 
 ------------------------------------------------------------------------------------------------------
 70. train_seq [00 02 08 09], val_seq [01 04 05 06 07 10]. 48 batch size. 12*4 gradient accumulation. 4 layers rnn, 4 layers ode. regresson output directly.  Exploded in loss. 

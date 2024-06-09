@@ -318,7 +318,7 @@ class Compose(object):
         return format_string
 
 
-class Normalize(object):
+class NormalizeImage(object):
     def __init__(self, mean, std):
         self.mean = mean
         self.std = std
@@ -327,6 +327,22 @@ class Normalize(object):
         for tensor in images:
             for t, m, s in zip(tensor, self.mean, self.std):
                 t.sub_(m).div_(s)
+        return images, imus, intrinsics, timestamps
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + "("
+        format_string += "mean: {}, ".format(self.mean)
+        format_string += "std: {})\n".format(self.std)
+        return format_string
+    
+class NormalizeIMU(object):
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, images, imus, intrinsics, timestamps):
+        # Normalize the IMU data
+        imus = (imus - self.mean) / self.std
         return images, imus, intrinsics, timestamps
 
     def __repr__(self):

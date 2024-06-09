@@ -44,6 +44,7 @@ def get_args():
 
     # Data Augmentation
     parser.add_argument("--data_dropout", type=float, default=0.0, help="irregularity in the dataset by dropping out randomly")
+    parser.add_argument("--data_dropout_std", type=float, default=0.0, help="std of irregularity across each epoch")
     parser.add_argument("--eval_data_dropout", type=float, default=0.0, help="irregularity in the eval dataset")
     parser.add_argument("--img_w", type=int, default=512, help="image width")
     parser.add_argument("--img_h", type=int, default=256, help="image height")
@@ -53,6 +54,7 @@ def get_args():
     parser.add_argument("--hflip", default=False, action="store_true", help="whether to use horizontal flipping as augmentation")
     parser.add_argument("--color", default=False, action="store_true", help="whether to use color augmentations")
     parser.add_argument("--seq_len", type=int, default=11, help="sequence length of images")
+    parser.add_argument("--normalize", default=False, action="store_true", help="whether to normalize the images")
 
     # Fusion Module Parameters
     parser.add_argument("--fuse_method", type=str, default="cat", help="fusion method of encoded IMU and Images [cat, soft, hard]")
