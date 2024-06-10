@@ -50,7 +50,11 @@ class PoseCDE(nn.Module):
         self.cde_fn_num_layers = opt.cde_fn_num_layers
       
         self.fuse = FusionModule(self.f_len ,opt.fuse_method)
-        self.reduction_net = nn.Linear(self.f_len, opt.cde_hidden_dim)
+        self.reduction_net = nn.Sequential(
+            nn.Linear(self.f_len, self.f_len//2),
+            nn.LeakyReLU(0.1, inplace=True),
+            nn.Linear(self.f_len//2, opt.cde_hidden_dim)
+            )
         self.initial = nn.Sequential(
             nn.Linear(opt.cde_hidden_dim + 1, opt.cde_hidden_dim),
             nn.Tanh()
@@ -76,26 +80,24 @@ class PoseCDE(nn.Module):
         
         ts_diff = ts - ts[:, :1] # Time difference from the first timestamp
         
-        ts =  ts_diff.unsqueeze(-1) if self.training else ts.unsqueeze(-1)
-        # Check if in training or evaluation mode
-
+        ts =  ts_diff.unsqueeze(-1)
         x = torch.cat([ts[:, 1:], fused_features], dim=-1)
+
         coeffs = cde.linear_interpolation_coeffs(x, rectilinear=0)
         X = cde.LinearInterpolation(coeffs)
-        z_0 = self.initial(X.evaluate(X.interval[0]))
-        #  if prev is None else prev
-        h_T = []
-        for i in range(seq_len):
-            eval_times = ts[0, i:i+2].squeeze(1)
-            # Integrate using the Neural CDE with all evaluation timestamps
-            # kwargs = dict(adjoint_params=tuple(self.cde_func.parameters()) + (coeffs, eval_times)) if self.adjoint else {}
-            h_i = cde.cdeint(X=X, func=self.cde_func, z0=z_0, t=eval_times, adjoint=self.adjoint, atol=1e-6, rtol=1e-4, method=self.solver)
-            h_T.append(h_i[:, -1, :])
-        h_T = torch.stack(h_T, dim=1)
+        z_0 = torch.zeros(batch_size, self.cde_hidden_dim, device=fused_features.device) if prev is None else prev
+        
+        eval_times = torch.linspace(0.1, 1.0, 10, dtype=torch.float32).to(fused_features.device)
+        kwargs = dict(adjoint_params=tuple(self.cde_func.parameters()) + (coeffs,)) if self.adjoint else {}
+        # Integrate using the Neural CDE with all evaluation timestamps
+        h_i = cde.cdeint(X=X, func=self.cde_func, z0=z_0, t=eval_times, adjoint=self.adjoint, atol=1e-6, rtol=1e-4, method=self.solver, **kwargs)
         # print("h_diff shape:", h_diff.shape)
-        poses = self.regressor(h_T)
-        return poses, z_0 # Return the last hidden state
+        poses = self.regressor(h_i)
+        return poses, h_i[:, -1] # Return the last hidden state
     
+    def get_reduction_net_params(self):
+        return self.reduction_net.parameters()
+     
     def get_regressor_params(self):
         return self.regressor.parameters()
     

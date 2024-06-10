@@ -55,6 +55,7 @@ class InertialEncoder(nn.Module):
             nn.Dropout(opt.imu_dropout),
         )
         self.proj = nn.Linear(256 * 1 * 11, opt.i_f_len)
+        self.i_f_len = opt.i_f_len
 
     def forward(self, x):
         num_pairs = (x.shape[1]-1) // 10
@@ -70,7 +71,7 @@ class InertialEncoder(nn.Module):
         )  # x: (N x seq_len, 11, 6)
         x = self.encoder_conv(x.permute(0, 2, 1))  # x: (N x seq_len, 64, 11)
         out = self.proj(x.view(x.shape[0], -1))  # out: (N x seq_len, 256)
-        return out.view(batch_size, seq_len, 256)
+        return out.view(batch_size, seq_len, self.i_f_len)
 
 
 class ImageEncoder(nn.Module):

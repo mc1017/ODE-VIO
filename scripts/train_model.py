@@ -8,7 +8,7 @@ from src.models.DeepVIO import DeepVIO
 from src.models.DeepVIO_RDE import DeepVIO_RDE
 from utils.params import set_gpu_ids, load_pretrained_model, get_optimizer
 from utils.utils import setup_experiment_directories, setup_training_logger, setup_debug_logger,print_tensor_stats
-from utils.profiler import trace_handler
+from utils.profiler import trace_handler, log_parameter_count
 from torch.autograd.profiler import record_function
 from scripts.transforms import get_transforms
 from scripts.config import get_args  
@@ -59,9 +59,12 @@ def train(model, optimizer, train_loader, logger, ep):
     #    with_stack=True,
     #    on_trace_ready=trace_handler,
     # ) as prof:
+    last_folder = None
     for i, (imgs, imus, gts, timestamps, folder) in enumerate(
         train_loader
     ):
+            prev = None if folder != last_folder else prev.detach()
+            last_folder = folder
             # imgs.shape, imus.shape = torch.Size([batch_size, 11, 3, 256, 512]), torch.Size([batch_size, 101, 6])
             # Reason why imus has 101 samples is becuase there there are 10 samples per 1 image, between 2 images, there are 11 imu samples. So between 11 images there are 100 samples. The last image also has 1 imu data, thus 101 samples including boundary of 11 images.
             imgs = imgs.cuda().float()
@@ -72,7 +75,7 @@ def train(model, optimizer, train_loader, logger, ep):
             # imgs.shape, imus.shape, timestamps.shape = torch.Size([32, 11, 3, 256, 512]) torch.Size([32, 101, 6]) torch.Size([32, 11])
             # prof.step()
             # with record_function("## forward ##"):
-            poses, _ = model(imgs, imus, timestamps, hc=None,)
+            poses, prev = model(imgs, imus, timestamps, hc=prev,)
             # Calculate angle and translation loss
             angle_loss = torch.nn.functional.mse_loss( poses[:, :, :3], gts[:, :, :3])
             translation_loss = torch.nn.functional.mse_loss( poses[:, :, 3:], gts[:, :, 3:])
@@ -83,6 +86,7 @@ def train(model, optimizer, train_loader, logger, ep):
             # with record_function("## backward ##"):
             loss.backward()
             
+            
             # Gradient accumulation
             if (i + 1) % args.grad_accumulation_steps == 0 or (i + 1) == data_len:
                 if args.gradient_clip:
@@ -90,6 +94,7 @@ def train(model, optimizer, train_loader, logger, ep):
                 # with record_function("## optimizer ##"):
                 optimizer.step()
                 optimizer.zero_grad()
+                
                 
             if (i+1) % args.print_frequency == 0:
                 message = f"Epoch: {ep}, iters: {i+1}/{data_len}, pose loss: {pose_loss.item():.6f}, angle_loss: {angle_loss.item():.6f}, translation_loss: {translation_loss.item():.6f}, loss: {loss.item():.6f}"
@@ -157,13 +162,23 @@ def get_train_loader(args):
     )
     return train_loader
 
+def load_pretrain_flownet(model, args):
+    pretrained_w = torch.load(args.pretrain_flownet, map_location="cpu")
+    model_dict = model.Image_net.state_dict()
+    update_dict = {
+        k: v for k, v in pretrained_w["state_dict"].items() if k in model_dict
+    }
+    model_dict.update(update_dict)
+    model.Image_net.load_state_dict(model_dict)
+    logger.info("Pretrained flownet loaded")
 
 def main():
     gpu_id = set_gpu_ids(args)
 
     # Model initialization
     model = DeepVIO(args)
-
+    log_parameter_count(model, logger)
+    
     # Continual training or not
     load_pretrained_model(model, args)
     pretrain = args.pretrain
@@ -220,10 +235,6 @@ def main():
         best, t_rel, r_rel, t_rmse, r_rmse  = evaluate(model, tester, ep, best)
         if args.wandb:
             wandb.log({"t_rel": t_rel, "r_rel": r_rel, "t_rmse": t_rmse, "r_rmse": r_rmse, "best_t_rel": best, "avg_pose_loss": avg_pose_loss})
-        
-        # # Early stopping
-        # if ep == 5 and avg_pose_loss > 0.1 or ep == 10 and avg_pose_loss > 0.01:
-        #     return
         
     message = f"Training finished, best t_rel: {best:.4f}"
     logger.info(message)

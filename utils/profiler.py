@@ -18,3 +18,12 @@ def trace_handler(prof: torch.profiler.profile):
 
    # Construct the memory timeline file.
    prof.export_memory_timeline(f"{file_prefix}.html", device="cuda:0")
+   
+   
+def log_parameter_count(model, logger):
+   pytorch_total_params = sum(p.numel() for p in model.parameters())
+   pytorch_total_trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+   logger.info(f"Total parameters: {pytorch_total_params}")
+   logger.info(f"Total trainable parameters: {pytorch_total_trainable_params}")
+   
+   

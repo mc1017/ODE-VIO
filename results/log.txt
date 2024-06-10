@@ -274,6 +274,13 @@ Can try to pass on the difference between the two time.
 
 146. Try to regress from the start of sequence by resetting z_0 to the start of new seqeunce.
 
+151, 152 Reusing h_0 in the next iteration. For 04, it seems to grow slowly and improve to a straight line. however for a few sequences together, it just decays into a half circle. Actually need to run longer for the many sequence together to understand. 
+
+153,154. Return the h_10 to the next iteration. Do not shuffle during training so that it learns to use the hidden state properly. For 04, it seems to learn relatively ok right after epoch 20, suggesting the learning rate for joint might be more suitable for it. Need to test this hypothesis by running at a degree loger for learning rate. Also tried training on multiple sequences. Don't know how it performs. 
+
+155. 
+
+
 
 
 ====================================================

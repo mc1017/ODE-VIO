@@ -33,7 +33,7 @@ def get_args():
     parser.add_argument("--freeze_encoder", default=False, action="store_true", help="freeze the encoder or not")
     parser.add_argument("--weight_decay", type=float, default=5e-5, help="weight decay for the optimizer")
     parser.add_argument("--batch_size", type=int, default=26, help="batch size")
-    parser.add_argument("--shuffle", type=int, default=True, help="shuffle data samples or not")
+    parser.add_argument("--shuffle", type=bool, default=True, help="shuffle data samples or not")
     parser.add_argument("--epochs_warmup", type=int, default=20, help="number of epochs for warmup")
     parser.add_argument("--epochs_joint", type=int, default=40, help="number of epochs for joint training")
     parser.add_argument("--epochs_fine", type=int, default=40, help="number of epochs for finetuning")
