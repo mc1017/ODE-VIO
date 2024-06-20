@@ -21,13 +21,12 @@ def get_args():
     parser.add_argument("--pretrain", type=str, default=None, help="path to the pretrained model")
     parser.add_argument("--train_seq", type=str, default=["00", "01", "02", "04", "08", "09"], nargs="+", help="sequences for training")
     parser.add_argument("--val_seq", type=str, default=["06"], nargs="+", help="sequences for validation")
-    parser.add_argument("--test_seq", type=str, default=["05", "07", "10"], nargs="+", help="sequences for testing")
     parser.add_argument("--seed", type=int, default=0, help="random seed")
     parser.add_argument("--workers", type=int, default=8, help="number of workers in dataloader")
     parser.add_argument("--print_frequency", type=int, default=10, help="print frequency for loss values")
 
     # Training Hyperparameters
-    parser.add_argument("--model_type", type=str, default="ode-rnn", help="type of model [rnn, ode, ode-rnn, ltc, cfc]")
+    parser.add_argument("--model_type", type=str, default="ode-rnn", help="type of model [ode-rnn (ODE-VIO), cde]")
     parser.add_argument("--optimizer", type=str, default="Adam", help="type of optimizer [Adam, SGD]")
     parser.add_argument("--grad_accumulation_steps", type=int, default=1, help="gradient accumulation steps before updating")
     parser.add_argument("--freeze_encoder", default=False, action="store_true", help="freeze the encoder or not")

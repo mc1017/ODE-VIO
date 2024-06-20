@@ -37,7 +37,6 @@ parser.add_argument( "--optimizer", type=str, default="Adam", help="type of opti
 parser.add_argument( "--grad_accumulation_steps", type=int, default=1, help="gradient accumulation steps before updating")
 parser.add_argument( "--freeze_encoder", default=False, action="store_true", help="freeze the encoder or not")
 parser.add_argument( "--weight_decay", type=float, default=5e-6, help="weight decay for the optimizer")
-parser.add_argument("--batch_size", type=int, default=26, help="batch size")
 parser.add_argument( "--shuffle", type=int, default=True, help="shuffle data samples or not")
 parser.add_argument( "--gradient_clip", type=float, default=5, help="gradient clipping norm/clip value")
 
