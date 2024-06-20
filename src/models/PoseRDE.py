@@ -6,7 +6,7 @@ from src.models.FusionModule import FusionModule
 
 class PoseRDE(nn.Module):
     """
-    A module for pose estimation using Neural Controlled Differential Equations (CDEs).
+    A module for pose estimation using Neural Rough Differential Equations (RDEs). (Under development)
 
     This module combines visual (image) and inertial (IMU) features, integrates them over time using a neural CDE approach, and regresses to pose estimations. It employs spline interpolation to make feature sequences continuous before applying neural CDEs to integrate hidden states.
 

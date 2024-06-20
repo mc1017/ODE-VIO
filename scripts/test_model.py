@@ -1,14 +1,9 @@
 import argparse
 import torch
 import numpy as np
-import math
-import wandb
-from src.data.KITTI_dataset import KITTI, SequenceBoundarySampler
 from src.data.KITTI_eval import KITTI_tester
 from src.models.DeepVIO import DeepVIO
-from utils.params import set_gpu_ids, load_pretrained_model, get_optimizer
-from utils.utils import setup_experiment_directories, setup_training_logger, setup_debug_logger, print_tensor_stats
-from src.data.transforms import get_transforms
+from utils.utils import set_gpu_ids 
 from pathlib import Path
 import os
 

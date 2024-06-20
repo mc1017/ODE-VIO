@@ -14,8 +14,8 @@ python3 -m scripts.train_model \
   --rnn_num_layers=3 \
   --ode_hidden_dim=1024 \
   --workers=2 \
-  --train_seq 00 01 02 04 08 09 \
-  --val_seq 06 \
+  --train_seq 04 \
+  --val_seq 04 \
   --lr_warmup=1e-4 \
   --lr_joint=1e-5 \
   --lr_fine=1e-6 \

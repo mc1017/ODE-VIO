@@ -11,7 +11,7 @@ from fvcore.nn import FlopCountAnalysis
 
 class DeepVIO(nn.Module):
     """
-    Deep Visual-Inertial Odometry (VIO) model that combines data from visual and inertial sensors to estimate poses.
+    General model that combines data from visual and inertial sensors to estimate poses.
 
     This class integrates separate encoders for image and inertial data streams, selecting an appropriate model for pose estimation based on configuration options. It supports various pose estimation models such as RNNs, ODE-RNNs, CDEs, and NCPs.
 
@@ -64,16 +64,7 @@ class DeepVIO(nn.Module):
         fv, fi = self.Image_net(img), self.Inertial_net(imu)
         
         # Obtain pose estimations
-        # self.analyse_flops(fv, fi, timestamps)
-        # start = torch.cuda.Event(enable_timing=True)
-        # end = torch.cuda.Event(enable_timing=True)
-
-        # start.record()
         poses, h_T = self.Pose_net(fv, fi, timestamps, prev=hc)
-        # end.record()
-        # torch.cuda.synchronize()
-
-        # print("Run time:", start.elapsed_time(end))
         return poses, h_T
     
     def analyse_flops(self, fv, fi, timestamps):

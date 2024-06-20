@@ -1,11 +1,10 @@
 import torch
 import numpy as np
-import math
 import wandb
 from src.data.KITTI_dataset import KITTI, SequenceBoundarySampler
 from src.data.KITTI_eval import KITTI_tester
 from src.models.DeepVIO import DeepVIO
-from utils.utils import setup_experiment_directories, setup_training_logger, setup_debug_logger,print_tensor_stats, set_gpu_ids, load_pretrained_model, get_optimizer
+from utils.utils import setup_experiment_directories, setup_training_logger, setup_debug_logger, print_tensor_stats, set_gpu_ids, load_pretrained_model, get_optimizer
 from utils.profiler import trace_handler, log_parameter_count
 from torch.autograd.profiler import record_function
 from src.data.transforms import get_transforms
@@ -47,34 +46,19 @@ def profile_memory():
     torch.cuda.empty_cache()
 
 def train(model, optimizer, train_loader, logger, ep):
+    """
+    Main Training Loop for the model
+    """
     mse_losses = []
     data_len = len(train_loader)
     optimizer.zero_grad()
-    torch.cuda.memory._record_memory_history(max_entries=10000000)
+    # torch.cuda.memory._record_memory_history(max_entries=10000000) # For memory profiling
     
-    # last_folder = None
-    total_time = 0
-    # device = torch.device('cuda:1')
-    # model.to(device)
-    # with torch.profiler.profile(
-    #    activities=[
-    #        torch.profiler.ProfilerActivity.CPU,
-    #        torch.profiler.ProfilerActivity.CUDA,
-    #    ],
-    #    schedule=torch.profiler.schedule(wait=0, warmup=0, active=6, repeat=1),
-    #    record_shapes=True,
-    #    profile_memory=True,
-    #    with_stack=True,
-    #    on_trace_ready=torch.profiler.tensorboard_trace_handler('profiling/ode-rnn'),
-    # ) as prof:
     for i, (imgs, imus, gts, timestamps, folder) in enumerate(
         train_loader
     ):  
             torch.cuda.empty_cache()
-            # prof.step()
-            # prev = None if folder != last_folder else prev.detach()
-            # last_folder = folder
-            # imgs.shape, imus.shape = torch.Size([batch_size, 11, 3, 256, 512]), torch.Size([batch_size, 101, 6])
+            
             # Reason why imus has 101 samples is becuase there there are 10 samples per 1 image, between 2 images, there are 11 imu samples. So between 11 images there are 100 samples. The last image also has 1 imu data, thus 101 samples including boundary of 11 images.
             imgs = imgs.cuda().float()
             imus = imus.cuda().float()
@@ -82,17 +66,8 @@ def train(model, optimizer, train_loader, logger, ep):
             timestamps = timestamps.cuda().float()
 
             # imgs.shape, imus.shape, timestamps.shape = torch.Size([32, 11, 3, 256, 512]) torch.Size([32, 101, 6]) torch.Size([32, 11])
-            
-            # with record_function("## forward ##"):
-            # start = torch.cuda.Event(enable_timing=True)
-            # end = torch.cuda.Event(enable_timing=True)
-            # start.record()
             poses,_ = model(imgs, imus, timestamps, hc=None)
-            # end.record()
-            # torch.cuda.synchronize()
-            # elapsed_time_ms = start.elapsed_time(end)
-            # print(f'Elapsed time: {elapsed_time_ms:.3f} ms')
-            # total_time += elapsed_time_ms
+            
             # Calculate angle and translation loss
             angle_loss = torch.nn.functional.mse_loss( poses[:, :, :3], gts[:, :, :3])
             translation_loss = torch.nn.functional.mse_loss( poses[:, :, 3:], gts[:, :, 3:])
@@ -100,7 +75,6 @@ def train(model, optimizer, train_loader, logger, ep):
             # Calculate Loss
             pose_loss = 100 * angle_loss + translation_loss
             loss = pose_loss
-            # with record_function("## backward ##"):
             loss.backward()
             
             
@@ -108,7 +82,6 @@ def train(model, optimizer, train_loader, logger, ep):
             if (i + 1) % args.grad_accumulation_steps == 0 or (i + 1) == data_len:
                 if args.gradient_clip:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=args.gradient_clip)
-                with record_function("## optimizer ##"):
                     optimizer.step()
                 optimizer.zero_grad()
                 
@@ -116,26 +89,21 @@ def train(model, optimizer, train_loader, logger, ep):
             if (i+1) % args.print_frequency == 0:
                 message = f"Epoch: {ep}, iters: {i+1}/{data_len}, pose loss: {pose_loss.item():.6f}, angle_loss: {angle_loss.item():.6f}, translation_loss: {translation_loss.item():.6f}, loss: {loss.item():.6f}"
                 logger.info(message)
-                # try:
-                #     torch.cuda.memory._dump_snapshot(f"snapshot_{i+1}.pickle")
-                # except Exception as e:
-                #     logger.error(f"Failed to capture memory snapshot {e}")
                 
             mse_losses.append(pose_loss.item())
-            
-                
-    # torch.cuda.memory._record_memory_history(enabled=None)
-    # print(total_time/len(train_loader))
+    # torch.cuda.memory._record_memory_history(enabled=None) # (For Memory Profiling)
     return np.mean(mse_losses)
 
 
 def evaluate(model, tester, ep, best):
-    # Evaluate the model
+    """
+    Evaluate the model on the evaluation dataset. It saves the model, calculates all parameters, and generate a plot
+    """
     logger.info("Evaluating the model")
     with torch.no_grad():
         model.eval()
         errors = tester.eval(model, num_gpu=1)
-        tester.generate_plots(graph_dir, ep)
+        tester.generate_plots(graph_dir, ep) # Optional: Generate plots for the evaluation
 
     t_rel = np.mean([errors[i]["t_rel"] for i in range(len(errors))])
     r_rel = np.mean([errors[i]["r_rel"] for i in range(len(errors))])
@@ -164,7 +132,6 @@ def get_train_loader(args):
         train_seqs=args.train_seq,
         transform=transform_train,
         logger=debug_logger,
-        # Get a random dropout level
         dropout=dropout_ratio,
     )
     batch_sampler = SequenceBoundarySampler(
@@ -194,6 +161,10 @@ def load_pretrain_flownet(model, args):
     logger.info("Pretrained flownet loaded")
 
 def main():
+    """
+    Main entry point
+    """
+    
     gpu_id = set_gpu_ids(args)
 
     # Model initialization
@@ -239,10 +210,10 @@ def main():
         train_loader = get_train_loader(args)
         
         lr = update_status(ep, args, model)
-        # Create parameter groups
-        optimizer.param_groups[0]["lr"] = lr
-        optimizer.param_groups[1]["lr"] = lr
         
+        # Create parameter groups for layer based learning rates (Optional)
+        optimizer.param_groups[0]["lr"] = lr
+        # optimizer.param_groups[1]["lr"] = lr
         message = f"Epoch: {ep}, lr: {lr}"
         logger.info(message)
         model.train()
