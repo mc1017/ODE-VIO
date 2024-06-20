@@ -8,8 +8,7 @@ matplotlib==3.8.2
 tqdm==4.66.2
 torchdiffeq==0.2.3
 torchode==0.2.0
-black
-ruff
 torchcde==0.2.5
 wandb==0.16.6
 ncps==0.0.7
+fvcore==0.1.5.post20210716

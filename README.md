@@ -1,51 +1,106 @@
-# Advancing VIO with Neural ODEs
-
-This is the repository that contains code for the implmentation of visual-inertial odometry (VIO) algorithm using Neural ODEs. Neural ODEs learns to parameterise a continuous function to fit the trajectory of the device, making it more suitable for handling irregularly sampled data compared to traditional RNNs. 
-
-Since the current SOTA VIO algorithms uses mainly variants of RCNN architectures, imputation or interpolation of data is required in the case of irregular dataset. Neural ODEs provide a promising alternative as the continuous representation naturally handles observations arriving at irregular intervals. 
-
-Here, we provide the implementation of two architectures within the family of Neural ODEs:
-1. ODE-RNN
-2. Neural CDEs
-
-We use KITTI Odometry dataset as benchmark and compare it against SOTA algorithms. 
-
-## Versions
-
-Cuda 12.4 is used. 
+# Deep Continuous VIO: Advancing End-to-End Visual-Inertial Odometry with Neural ODEs
 
 
-## To start training
-```
-python3 -m scripts.train_model
-```
+This repository contains the official code for the implmentation of ODE-VIO, a visual-inertial odometry (VIO) algorithm using Neural ODEs. Neural ODEs learns to parameterise a continuous function to fit the trajectory of the device, making it more suitable for handling irregularly sampled data compared to traditional RNNs.
 
-Arguments can be parsed into training using the following format.
+The overall architecture of ODE-VIO is shown below. It is trained and tested on the KITTI odometry benchmark. 
+
+<img src="figures/ode-vio.png" alt="Overview of ODE-VIO architecture" width="800"/> 
+
+Some of the code are referenced from the code from Yang et al. in their [open-source repository](https://github.com/mingyuyng/Visual-Selective-VIO/tree/main). These include the data preparation script, code for computing KITTI metrics, and skeleton of the model and training loop. 
+
+## Repository Structure
 
 ```
-python3 -m scripts.train_model --gpu_ids=1 --experiment_name=6 --ode_activation_fn=softplus --train_seq 04 10  --val_seq 04 10
+ODE-VIO/
+├── README.md
+├── dataset/
+│   ├── data_prep.sh/               # Dataset preparation script
+│   └── imus/                       # IMU data
+├── scripts/
+│   ├── run_training.sh             # Script to run training
+│   ├── run_testing.sh              # Script to run testing
+│   ├── train_model.py              # Training entry point
+│   ├── test_model.py               # Testing entry point
+│   └── config.py                   # Default parameters in argparse
+├── src/
+│   └── utils/
+│       ├── params.py               # Load parameters
+│       ├── profiler.py             # Pytorch profiler code
+│       └── utils.py                # Handling directories, logging, gpu
+│   └── data/
+│       ├── KITTI_dataset.py        # Dataset preprocessing and loading
+│       ├── KITTI_eval.py           # Dataset loading for testing 
+│       ├── transforms.py           # Data transformations 
+│       └── utils.py                # Metrics calculation, linear algebra
+│   └── models/
+│       ├── DeepVIO.py              # Entry point of model forward pass
+│       ├── Encoder.py              # Image and inertial encoders
+│       ├── FusionModule.py         # Fusion module to combine visual and inertial features
+│       ├── PoseODERNN.py           # ODE-RNN pose regressor (ODE-VIO)
+│       ├── PoseCDE.py              # Neural CDE pose regressor
+│       └── ODEFunc.py              # ODE and CDE function
+└── requirements.txt
 ```
 
-Black formatter and ruff linter are used
+## Preprequisites
+
+Python 3.10 is used for training. The models are trained and tested on NVIDIA RTX3090 with cuda 12.4. 
+
+The other prerequisite libraries can be downloaded through running the commands below.
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip3 install -r requirements.txt
 ```
-black .
-ruff
+
+## Dataset Preparation
+
+To prepare the dataset, we can run the script `dataset/data_prep.sh`. It downloads all the necessary seqeunces for training and testing. Specifically, image seqeunce 00 to seqeunce 10 are downloaded as they contain ground truth data. IMU data is provided in the `dataset` directory. 
+
+
+```bash
+bash dataset/data_prep.sh
 ```
 
+## Loading Pretrained Models
 
-# Neural CDE
+Pretrained Flownet and ODE-VIO are provided in a [google drive link](https://drive.google.com/drive/folders/1XGc1tCsitoZjuzjjWoqU3q3KRTLK7Do9?usp=sharing). Download both files and store them in a directory created with the following commands. 
 
-It is worth noting that all of this is very similar to handling irregular data with RNNs, with a few differences:
-- Time and observational masks are presented cumulatively, rather than as e.g. delta-time increments.
-- It's fine for there to be NaN values in the data (rather than filling them in with zeros or something), because the interpolation routines for torchcde handle that for you.
-- Variable length data can be extracted at the end of the CDE, rather than evaluating it at lots of different times. (Incidentally doing so is also more efficient when using the adjoint method, as you only have a single backward solve to make, rather than lots of small ones between all the final times.)
+```bash
+mkdir pretrained_models
+```
 
-# Activation Functions
+When using the pretrained models, remember to specify the pretrained path as a parameter in the python command in `run_training.sh`
 
-SELU activation function is preferred than tanh for intermediate results because of Activation Range and Gradients
-1. tanh Activation Function:
-Range: The output of the tanh function ranges from -1 to 1. This bounded range can be beneficial for certain types of normalized data, as it helps in keeping the neural network’s output values constrained.
-Vanishing Gradients: For large values (either positive or negative), the gradient of the tanh function becomes very small (approaches zero). This phenomenon, known as the vanishing gradient problem, makes it difficult for the model to learn during training, especially for deeper networks, because updates to the weights become insignificantly small.
-2. SELU Activation Function:
-Self-normalizing Property: SELU has a unique property where it helps in keeping the mean and variance of the outputs of each layer close to zero and one, respectively, during training. This self-normalizing property leads to a more stable and faster convergence.
-Non-zero Gradients for Large Inputs: Unlike tanh, SELU maintains non-zero gradients even for large input values, which helps in continuous learning and avoids the vanishing gradient problem common in deep networks.
+Note that in the google drive, `ode-vio-v1` is the one evaluated for the report. `ode-vio-v2` is a fine-tuned version and will be continuously updated as we discover a better set of hyperparameters.
+
+## Training the Model
+
+Running the model is simple. Firstly, make sure you review the parameters specified in `scripts/config.py`. It shows the parameters that you can change, including the locations of pretrained models, learning rate, batch size, etc. Then, change the parameters to your configuration in the train_model.py.
+
+In our setup, wandb is used for visualisation of the runs. It is highly recommended that you setup a [wandb account](https://wandb.ai/). If wandb is should not be used, simply remove the parameter from the run configuration.
+
+The command to start the training is the following:
+```bash
+bash scripts/train_model.py
+```
+
+## Testing the Model
+
+Make sure you change the path parameters for the pretrained model before testing.
+After changing the parameters in `scripts/test_model.py`, testing the model is simplly running the following command:
+
+```bash
+bash scripts/test_model.py
+```
+
+The following plot shows comparison against various state-of-the-art methods under irregular sampling condition
+
+<img src="figures/irregularity-comparison.png" alt="Overview of ODE-VIO architecture" width="800"/> 
+
+
+
+
+

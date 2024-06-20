@@ -68,9 +68,9 @@ class PoseCDE(nn.Module):
             nn.Linear(self.cde_hidden_dim, 128),
             nn.LeakyReLU(0.1, inplace=True),
             nn.Linear(128, 6),
-
         )
         self.solver = opt.cde_solver
+        self.history = None
        
     
     def forward(self, fv, fi, ts, prev=None, do_profile=False):
@@ -78,22 +78,29 @@ class PoseCDE(nn.Module):
         fused_features = self.fuse(fv, fi)
         batch_size, seq_len, _ = fused_features.shape
         
-        ts_diff = ts - ts[:, :1] # Time difference from the first timestamp
+        ts_diff = ts - ts[:, :1] if self.training else ts # Time difference from the first timestamp
         
         ts =  ts_diff.unsqueeze(-1)
         x = torch.cat([ts[:, 1:], fused_features], dim=-1)
-
-        coeffs = cde.linear_interpolation_coeffs(x, rectilinear=0)
-        X = cde.LinearInterpolation(coeffs)
-        z_0 = torch.zeros(batch_size, self.cde_hidden_dim, device=fused_features.device) if prev is None else prev
+        observations = x 
         
-        eval_times = torch.linspace(0.1, 1.0, 10, dtype=torch.float32).to(fused_features.device)
+        # Add to history during evaluation. Do not add during training and reset to none
+        if not self.training:
+            self.history = torch.cat([self.history, x], dim=1) if prev is not None else x
+            observations = self.history
+        else:
+            self.history = None
+            
+        coeffs = cde.linear_interpolation_coeffs(observations, rectilinear=0)
+        X = cde.LinearInterpolation(coeffs)
+        z_0 = self.initial(X.evaluate(X.interval[0])) if prev is None else prev
+        # z_0 = self.initial(X.evaluate(X.interval[0])) if prev is None else prev
         kwargs = dict(adjoint_params=tuple(self.cde_func.parameters()) + (coeffs,)) if self.adjoint else {}
         # Integrate using the Neural CDE with all evaluation timestamps
-        h_i = cde.cdeint(X=X, func=self.cde_func, z0=z_0, t=eval_times, adjoint=self.adjoint, atol=1e-6, rtol=1e-4, method=self.solver, **kwargs)
-        # print("h_diff shape:", h_diff.shape)
+        print("Using Adjoint", self.adjoint)
+        h_i = cde.cdeint(X=X, func=self.cde_func, z0=z_0, t=ts[0, 1:].squeeze(1), adjoint=self.adjoint, atol=1e-6, rtol=1e-4, method=self.solver, **kwargs)
         poses = self.regressor(h_i)
-        return poses, h_i[:, -1] # Return the last hidden state
+        return poses, z_0 # Return the last hidden state
     
     def get_reduction_net_params(self):
         return self.reduction_net.parameters()

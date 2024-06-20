@@ -17,13 +17,13 @@ def trace_handler(prof: torch.profiler.profile):
    prof.export_chrome_trace(f"{file_prefix}.json.gz")
 
    # Construct the memory timeline file.
-   prof.export_memory_timeline(f"{file_prefix}.html", device="cuda:0")
+   prof.export_memory_timeline(f"{file_prefix}.html", device="cuda:1")
    
    
 def log_parameter_count(model, logger):
    pytorch_total_params = sum(p.numel() for p in model.parameters())
-   pytorch_total_trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+   pytorch_total_trainable_params = sum(p.numel() for p in model.Pose_net.parameters())
    logger.info(f"Total parameters: {pytorch_total_params}")
-   logger.info(f"Total trainable parameters: {pytorch_total_trainable_params}")
+   logger.info(f"Total regressor parameters: {pytorch_total_trainable_params}")
    
    

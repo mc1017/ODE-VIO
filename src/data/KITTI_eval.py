@@ -8,6 +8,8 @@ import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
 import random
 
+
+from torch.profiler import profile, record_function, ProfilerActivity
 from tqdm import tqdm
 from src.data.utils import (
     read_pose_from_text,
@@ -122,27 +124,39 @@ class KITTI_tester:
     def test_one_path(self, net, df, num_gpu=1):
         hc = None
         pose_list = []
+        # with profile(activities=[
+        # ProfilerActivity.CPU, ProfilerActivity.CUDA], profile_memory=True,record_shapes=True) as prof:
+        total_time = 0
         for i, (image_seq, imu_seq, gt_seq, ts_seq) in tqdm(
             enumerate(df), total=len(df), smoothing=0.9
         ):
             x_in = image_seq.unsqueeze(0).cuda().float()
             i_in = imu_seq.unsqueeze(0).cuda().float()
             t_in = ts_seq.unsqueeze(0).cuda().float()
+            # start = torch.cuda.Event(enable_timing=True)
+            # end = torch.cuda.Event(enable_timing=True)
             with torch.no_grad():
+                # with record_function("model_inference"):
+                # start.record()
                 pose, hc = net(x_in, i_in, t_in, hc=hc)
-
+                # end.record()
             # zero_pose = torch.zeros_like(pose[:, :1, :])
             # padded_poses = torch.cat((zero_pose, pose[:, :-1, :]), dim=1)
             # relative_pose = pose - padded_poses
+            # torch.cuda.synchronize()
+            # elapsed_time_ms = start.elapsed_time(end)
+            # print(f'Elapsed time: {elapsed_time_ms:.3f} ms')
+            # total_time += elapsed_time_ms
             relative_pose = pose
             pose_list.append(relative_pose[0, :, :].detach().cpu().numpy())
             # decision_list.append(decision[0,:,:].detach().cpu().numpy()[:, 0])
             # probs_list.append(probs[0,:,:].detach().cpu().numpy())
 
         pose_est = np.vstack(pose_list)
-        # dec_est = np.hstack(decision_list)
-        # prob_est = np.vstack(probs_list)
-        # return pose_est, dec_est, prob_est
+        # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
+        # print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=20))
+        # print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=20))
+        print(total_time)
         return pose_est, None, None
 
     def eval(self, net, num_gpu=1):
@@ -200,7 +214,9 @@ class KITTI_tester:
     def save_text(self, save_dir):
         for i, seq in enumerate(self.args.val_seq):
             path = save_dir / "{}_pred.txt".format(seq)
+            gt_path = save_dir / "{}_gt.txt".format(seq)
             saveSequence(self.est[i]["pose_est_global"], path)
+            saveSequence(self.est[i]["pose_gt_global"], gt_path)
             print("Seq {} saved".format(seq))
 
 

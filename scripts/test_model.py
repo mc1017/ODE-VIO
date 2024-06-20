@@ -8,7 +8,7 @@ from src.data.KITTI_eval import KITTI_tester
 from src.models.DeepVIO import DeepVIO
 from utils.params import set_gpu_ids, load_pretrained_model, get_optimizer
 from utils.utils import setup_experiment_directories, setup_training_logger, setup_debug_logger, print_tensor_stats
-from scripts.transforms import get_transforms
+from src.data.transforms import get_transforms
 from pathlib import Path
 import os
 

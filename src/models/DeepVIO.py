@@ -6,6 +6,8 @@ from src.models.PoseRNN import PoseRNN
 from src.models.PoseNCP import PoseNCP
 from src.models.PoseCDE import PoseCDE
 from src.models.PoseRDE import PoseRDE
+from fvcore.nn import FlopCountAnalysis
+
 
 class DeepVIO(nn.Module):
     """
@@ -56,14 +58,29 @@ class DeepVIO(nn.Module):
         elif opt.model_type == "ltc":
             raise NotImplementedError("LTC model not implemented yet")
         
-    def forward( self, img, imu, timestamps, hc=None):
+    def forward(self, img, imu, timestamps, hc=None):
         
         # Encode image and imu data
         fv, fi = self.Image_net(img), self.Inertial_net(imu)
         
         # Obtain pose estimations
+        # self.analyse_flops(fv, fi, timestamps)
+        # start = torch.cuda.Event(enable_timing=True)
+        # end = torch.cuda.Event(enable_timing=True)
+
+        # start.record()
         poses, h_T = self.Pose_net(fv, fi, timestamps, prev=hc)
+        # end.record()
+        # torch.cuda.synchronize()
+
+        # print("Run time:", start.elapsed_time(end))
         return poses, h_T
+    
+    def analyse_flops(self, fv, fi, timestamps):
+        flop_analyser = FlopCountAnalysis(self.Pose_net,(fv, fi, timestamps))
+        print(flop_analyser.by_module)
+        print(flop_analyser.by_module_and_operator())
+        print(flop_analyser.total())
 
 
 def initialization(net):

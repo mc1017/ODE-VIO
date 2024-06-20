@@ -278,7 +278,12 @@ Can try to pass on the difference between the two time.
 
 153,154. Return the h_10 to the next iteration. Do not shuffle during training so that it learns to use the hidden state properly. For 04, it seems to learn relatively ok right after epoch 20, suggesting the learning rate for joint might be more suitable for it. Need to test this hypothesis by running at a degree loger for learning rate. Also tried training on multiple sequences. Don't know how it performs. 
 
-155. 
+155. Tested lower learning rate by 10 times but it does not show any significant improvement, also only improved after 20 ipoch 
+
+156. Test using initial regressed state without initialising linear.
+
+157. Return last hidden state, but keep initial net without initialising linear. 
+
 
 
 
