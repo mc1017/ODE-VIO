@@ -1,7 +1,7 @@
 # Deep Continuous VIO: Advancing End-to-End Visual-Inertial Odometry with Neural ODEs
 
 
-This repository contains the official code for the implmentation of ODE-VIO, a visual-inertial odometry (VIO) algorithm using Neural ODEs. The Neural ODEs component learns to parameterise a continuoous function to the hidden state, so data that arrives at abritrary timestamps are handled naturally. This makes it more suitable for handling irregularly sampled data compared to traditional RNNs. We have shown that our model performs up to 40% better in relative translational error compared to existing models. 
+This repository contains the official code for the implmentation of ODE-VIO, a visual-inertial odometry (VIO) algorithm using Neural ODEs. The Neural ODEs component learns to parameterise a continuoous function to the hidden state, so data that arrives at abritrary timestamps are handled naturally. This makes it more suitable for handling irregularly sampled data compared to traditional RNNs. We have shown that our model performs up to 40% better in relative translational error compared to existing models under extreme irregularity conditions. 
 
 The overall architecture of ODE-VIO is shown below. It is trained and tested on the KITTI odometry benchmark. 
 
